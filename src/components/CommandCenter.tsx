@@ -1,0 +1,852 @@
+"use client";
+
+import dynamic from "next/dynamic";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { Fire, ListBullets, MapTrifold } from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { useLiveFeed } from "@/hooks/useLiveFeed";
+import { playAlarm, primeAudio } from "@/lib/alarm";
+import { FIREHOUSE, nearestHydrants } from "@/lib/geo";
+import { ACTIVE_STATUSES, HYDRANT_SITUATION_META } from "@/lib/meta";
+import type {
+  ActivityDTO,
+  HydrantDTO,
+  HydrantSituation,
+  IncidentDTO,
+  IncidentStatus,
+  LiveEvent,
+  RiskDTO,
+  RouteDTO,
+  SettingsDTO,
+  StatsDTO,
+  UnitDTO,
+  UnitStatus,
+} from "@/lib/types";
+import { applyTheme, getServerTheme, getTheme, subscribeTheme } from "@/lib/theme";
+import { cx, displayCode, fmtDistance } from "@/lib/utils";
+import { dispatchMessage, incomingMessage, replyMessage, setPublicBase, waLink } from "@/lib/wa";
+import DetailPanel, { type DetailTab } from "./DetailPanel";
+import DispatchDialog from "./DispatchDialog";
+import HydrantDialog, { EMPTY_HYDRANT_DRAFT, type HydrantDraft } from "./HydrantDialog";
+import HydrantsDialog from "./HydrantsDialog";
+import IncidentQueue from "./IncidentQueue";
+import NewIncidentDialog, { EMPTY_DRAFT, type IncidentDraft } from "./NewIncidentDialog";
+import NewUnitDialog, { EMPTY_UNIT_DRAFT, type UnitDraft } from "./NewUnitDialog";
+import SettingsDialog from "./SettingsDialog";
+import StatsStrip from "./StatsStrip";
+import TopBar from "./TopBar";
+import type { LayersState } from "./MapView";
+
+const MapView = dynamic(() => import("./MapView"), {
+  ssr: false,
+  loading: () => (
+    <div className="tac-grid grid h-full w-full place-items-center bg-bg">
+      <div className="text-center">
+        <MapTrifold size={30} className="mx-auto text-mu2" />
+        <p className="mt-2 text-[11px] tracking-[0.2em] text-mu2 uppercase">Cargando mapa táctico…</p>
+      </div>
+    </div>
+  ),
+});
+
+export interface InitialData {
+  incidents: IncidentDTO[];
+  units: UnitDTO[];
+  hydrants: HydrantDTO[];
+  risks: RiskDTO[];
+  activity: ActivityDTO[];
+  stats: StatsDTO;
+  settings: SettingsDTO;
+}
+
+async function jfetch<T>(url: string, init?: RequestInit): Promise<T> {
+  const r = await fetch(url, init);
+  const data = (await r.json().catch(() => ({}))) as T & { error?: string };
+  if (!r.ok) throw new Error(data.error ?? `Error ${r.status}`);
+  return data;
+}
+
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
+export default function CommandCenter({ initial }: { initial: InitialData }) {
+  // ----- Datos -----
+  const [incidents, setIncidents] = useState<IncidentDTO[]>(initial.incidents);
+  const [units, setUnits] = useState<UnitDTO[]>(initial.units);
+  const [hydrants, setHydrants] = useState<HydrantDTO[]>(initial.hydrants);
+  const [activity, setActivity] = useState<ActivityDTO[]>(initial.activity);
+  const [stats, setStats] = useState<StatsDTO>(initial.stats);
+  const [settings, setSettings] = useState<SettingsDTO>(initial.settings);
+
+  // Los enlaces compartidos por WhatsApp (foto, mapa) usan la URL pública configurada.
+  useEffect(() => {
+    setPublicBase(settings.public_base);
+  }, [settings.public_base]);
+
+  // ----- Selección / vista -----
+  const [selectedId, setSelectedId] = useState<number | null>(() => {
+    const active = initial.incidents.find((i) => ACTIVE_STATUSES.includes(i.status));
+    return active?.id ?? initial.incidents[0]?.id ?? null;
+  });
+  const [detail, setDetail] = useState<IncidentDTO | null>(null);
+  const [detailBusy, setDetailBusy] = useState(false);
+  const [tab, setTab] = useState<DetailTab>("detalle");
+  const [view, setView] = useState<"queue" | "map" | "detail">("map");
+  const [lastNewId, setLastNewId] = useState<number | null>(null);
+
+  // ----- Tiempo real / tema / capas -----
+  const [live, setLive] = useState(false);
+  const [soundOn, setSoundOn] = useState(initial.settings.alert_sound === "1");
+  const theme = useSyncExternalStore(subscribeTheme, getTheme, getServerTheme);
+  const [layers, setLayers] = useState<LayersState>({
+    incidents: true,
+    addresses: true,
+    units: true,
+    hydrants: true,
+    risks: true,
+    traffic: true,
+    quakes: true,
+    radius: true,
+  });
+
+  // ----- Diálogos -----
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [hydrantsOpen, setHydrantsOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
+  const [draft, setDraft] = useState<IncidentDraft>(EMPTY_DRAFT);
+  const [editFor, setEditFor] = useState<IncidentDTO | null>(null);
+  const [editDraft, setEditDraft] = useState<IncidentDraft>(EMPTY_DRAFT);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [dispatchFor, setDispatchFor] = useState<IncidentDTO | null>(null);
+  const [dispatchBusy, setDispatchBusy] = useState(false);
+  const [simBusy, setSimBusy] = useState(false);
+  const [pickFor, setPickFor] = useState<null | "incident" | "incident-edit" | "hydrant" | "unit">(null);
+  const [hydrantOpen, setHydrantOpen] = useState(false);
+  // Ruta vial trazada en el mapa (botón «Ruta» del detalle)
+  const [route, setRoute] = useState<{ incidentId: number; data: RouteDTO } | null>(null);
+  const [hydrantDraft, setHydrantDraft] = useState<HydrantDraft>(EMPTY_HYDRANT_DRAFT);
+  const [hydrantBusy, setHydrantBusy] = useState(false);
+  const [unitOpen, setUnitOpen] = useState(false);
+  const [unitDraft, setUnitDraft] = useState<UnitDraft>(EMPTY_UNIT_DRAFT);
+  const [unitBusy, setUnitBusy] = useState(false);
+
+  // ----- Tema -----
+  const toggleTheme = useCallback(() => {
+    applyTheme(getTheme() === "dark" ? "light" : "dark");
+  }, []);
+
+  // Desbloquea el audio con el primer gesto
+  useEffect(() => {
+    const h = () => primeAudio();
+    window.addEventListener("pointerdown", h, { once: true });
+    return () => window.removeEventListener("pointerdown", h);
+  }, []);
+
+  // ----- Carga de datos -----
+  const refresh = useCallback(async () => {
+    try {
+      const [inc, un, hy, st, act] = await Promise.all([
+        jfetch<{ incidents: IncidentDTO[] }>("/api/incidents"),
+        jfetch<{ units: UnitDTO[] }>("/api/units"),
+        jfetch<{ hydrants: HydrantDTO[] }>("/api/hydrants"),
+        jfetch<{ stats: StatsDTO }>("/api/stats"),
+        jfetch<{ activity: ActivityDTO[] }>("/api/activity?limit=40"),
+      ]);
+      setIncidents(inc.incidents);
+      setUnits(un.units);
+      setHydrants(hy.hydrants);
+      setStats(st.stats);
+      setActivity(act.activity);
+    } catch {
+      /* SSE reintentará */
+    }
+  }, []);
+
+  const loadDetail = useCallback(async (id: number) => {
+    setDetailBusy(true);
+    try {
+      const d = await jfetch<{ incident: IncidentDTO }>(`/api/incidents/${id}`);
+      setDetail(d.incident);
+    } catch {
+      /* mantener detalle previo */
+    } finally {
+      setDetailBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedId == null) return;
+    // Diferido un tick: el efecto no debe disparar setState de forma síncrona
+    // (regla react-hooks/set-state-in-effect).
+    const t = setTimeout(() => void loadDetail(selectedId), 0);
+    return () => clearTimeout(t);
+  }, [selectedId, loadDetail]);
+
+  // ----- Tiempo real -----
+  useLiveFeed({
+    onOpen: () => setLive(true),
+    onClose: () => setLive(false),
+    onEvent: (ev: LiveEvent) => {
+      if (ev.type === "hello") return;
+      if (ev.type === "settings") {
+        void jfetch<{ settings: SettingsDTO }>("/api/settings")
+          .then((d) => {
+            setSettings(d.settings);
+            setSoundOn(d.settings.alert_sound === "1");
+          })
+          .catch(() => {});
+        return;
+      }
+      if (ev.type === "incident" && ev.action === "created") {
+        setLastNewId(ev.id ?? null);
+        toast.warning(`Nuevo reporte: ${ev.title ?? "Emergencia"}`, {
+          description: "Ingresó por el canal ciudadano — revisa la cola de incidentes.",
+          duration: 6500,
+        });
+        if (soundOn) playAlarm();
+      }
+      if (ev.type === "mission_unaccepted") {
+        toast.error("Despacho sin confirmar", {
+          description: "La unidad no aceptó la misión en 60 segundos — considera reasignar.",
+          duration: 8000,
+        });
+      }
+      void refresh();
+      if (ev.type === "incident" && ev.id != null && ev.id === selectedId) {
+        void loadDetail(ev.id);
+      }
+    },
+  });
+
+  // ----- Derivados -----
+  const selectedIncident = useMemo(
+    () => incidents.find((i) => i.id === selectedId) ?? null,
+    [incidents, selectedId],
+  );
+  const detailForSelected = detail && detail.id === selectedId ? detail : null;
+  const nearHydrants = useMemo(
+    () =>
+      selectedIncident ? nearestHydrants(selectedIncident.lat, selectedIncident.lng, hydrants, 3) : [],
+    [selectedIncident, hydrants],
+  );
+  const dispatchNearHydrants = useMemo(
+    () => (dispatchFor ? nearestHydrants(dispatchFor.lat, dispatchFor.lng, hydrants, 3) : []),
+    [dispatchFor, hydrants],
+  );
+  const activeCount = useMemo(
+    () => incidents.filter((i) => ACTIVE_STATUSES.includes(i.status)).length,
+    [incidents],
+  );
+
+  // El mapa solo carga los incidentes en curso; si seleccionas uno de la cola
+  // «Historial» o «Todos», ese también aparece en el mapa para ubicarlo.
+  const mapIncidents = useMemo(() => {
+    const active = incidents.filter((i) => ACTIVE_STATUSES.includes(i.status));
+    const sel = selectedId != null ? incidents.find((i) => i.id === selectedId) : null;
+    if (sel && !ACTIVE_STATUSES.includes(sel.status)) return [...active, sel];
+    return active;
+  }, [incidents, selectedId]);
+
+  // ----- Acciones -----
+  function select(id: number, goDetail = false) {
+    setSelectedId(id);
+    setTab("detalle");
+    if (goDetail) setView("detail");
+  }
+
+  async function simulate() {
+    setSimBusy(true);
+    try {
+      const d = await jfetch<{ incident: IncidentDTO }>("/api/simulate", { method: "POST" });
+      setSelectedId(d.incident.id);
+      setTab("detalle");
+      setView("detail");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSimBusy(false);
+    }
+  }
+
+  async function changeStatus(incident: IncidentDTO, status: IncidentStatus) {
+    try {
+      const d = await jfetch<{ incident: IncidentDTO }>(`/api/incidents/${incident.id}`, {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ status }),
+      });
+      setDetail(d.incident);
+      const msg: Partial<Record<IncidentStatus, string>> = {
+        en_escena: "Unidad en la escena",
+        controlado: "Incendio controlado",
+        cerrado: "Incidente cerrado",
+      };
+      toast.success(msg[status] ?? "Estado actualizado");
+      void refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function confirmDispatch(unitIds: number[]) {
+    if (!dispatchFor) return;
+    setDispatchBusy(true);
+    const code = displayCode(dispatchFor.id, dispatchFor.createdAt);
+    const waUnit = settings.wa_unit;
+    const link = waUnit ? waLink(waUnit, dispatchMessage(dispatchFor, code, dispatchNearHydrants)) : null;
+    // Pre-abre la pestaña para sobrevivir al await (bloqueo de popups)
+    const win = link ? window.open("", "_blank") : null;
+    try {
+      const d = await jfetch<{ incident: IncidentDTO }>(`/api/incidents/${dispatchFor.id}/dispatch`, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ unitIds }),
+      });
+      setDetail(d.incident);
+      setDispatchFor(null);
+      const plural = unitIds.length > 1 ? `${unitIds.length} unidades` : "la unidad";
+      if (link && win) {
+        win.location.href = link;
+        toast.success(`Despacho enviado por WhatsApp a ${plural}`);
+      } else if (link) {
+        toast.success(`Despacho registrado (${plural})`, {
+          action: { label: "Abrir WhatsApp", onClick: () => window.open(link, "_blank") },
+        });
+      } else {
+        toast.success(`Despacho registrado en el sistema (${plural})`, {
+          description: "Configura el número de WhatsApp de la unidad para avisarle automáticamente.",
+        });
+      }
+      void refresh();
+    } catch (e) {
+      win?.close();
+      toast.error((e as Error).message);
+    } finally {
+      setDispatchBusy(false);
+    }
+  }
+
+  function reply(incident: IncidentDTO) {
+    if (!incident.reporterPhone) {
+      toast.info("El reporte no tiene teléfono de contacto");
+      return;
+    }
+    const code = displayCode(incident.id, incident.createdAt);
+    window.open(waLink(incident.reporterPhone, replyMessage(incident, code)), "_blank", "noopener");
+  }
+
+  function notifyCentral(incident: IncidentDTO) {
+    if (!settings.wa_central) {
+      toast.info("Configura el número de la central");
+      return;
+    }
+    const code = displayCode(incident.id, incident.createdAt);
+    window.open(waLink(settings.wa_central, incomingMessage(incident, code)), "_blank", "noopener");
+  }
+
+  async function saveNewIncident(picks: number[] = []) {
+    setSaveBusy(true);
+    try {
+      const d = await jfetch<{ incident: IncidentDTO }>("/api/incidents", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          ...draft,
+          photo: undefined, // el data URL viaja como photoBase64
+          photoBase64: draft.photo || null,
+          lat: Number(draft.lat),
+          lng: Number(draft.lng),
+          reporterName: draft.reporterName || null,
+          source: "manual",
+        }),
+      });
+      // «Despachar ahora»: las unidades marcadas salen directo con la misión
+      // (push a su tablet + mensaje por WhatsApp) — también para reportes
+      // por WhatsApp que la central registra.
+      if (picks.length) {
+        const disp = await jfetch<{ incident: IncidentDTO }>(`/api/incidents/${d.incident.id}/dispatch`, {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ unitIds: picks }),
+        });
+        setDetail(disp.incident);
+        toast.success(`Reporte registrado y despachado a ${picks.length} unidad${picks.length > 1 ? "es" : ""}`);
+      } else {
+        toast.success("Reporte registrado en la central");
+      }
+      setNewOpen(false);
+      setDraft(EMPTY_DRAFT);
+      setSelectedId(d.incident.id);
+      setTab("detalle");
+      setView("detail");
+      void refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaveBusy(false);
+    }
+  }
+
+  function openEdit(incident: IncidentDTO) {
+    setEditDraft({
+      title: incident.title,
+      address: incident.address,
+      severity: incident.severity,
+      notes: incident.notes ?? "",
+      lat: String(incident.lat),
+      lng: String(incident.lng),
+      reporterName: incident.reporterName ?? "",
+      photo: incident.photoUrl ?? "",
+    });
+    setEditFor(incident);
+    // La ventana queda abierta (y arrastrable): los clics en el mapa ajustan la ubicación
+    setPickFor("incident-edit");
+  }
+
+  async function saveEdit() {
+    if (!editFor) return;
+    setSaveBusy(true);
+    try {
+      // La foto: data URL nueva se sube; "" quita la existente; una URL se deja igual
+      const newPhoto = editDraft.photo.startsWith("data:") ? editDraft.photo : null;
+      const removePhoto = !editDraft.photo && Boolean(editFor.photoUrl);
+      const d = await jfetch<{ incident: IncidentDTO }>(`/api/incidents/${editFor.id}`, {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          title: editDraft.title,
+          address: editDraft.address,
+          severity: editDraft.severity,
+          notes: editDraft.notes,
+          lat: Number(editDraft.lat),
+          lng: Number(editDraft.lng),
+          reporterName: editDraft.reporterName || null,
+          photoBase64: newPhoto,
+          removePhoto,
+        }),
+      });
+      toast.success("Reporte actualizado");
+      setEditFor(null);
+      setPickFor((p) => (p === "incident-edit" ? null : p));
+      setEditDraft(EMPTY_DRAFT);
+      setDetail(d.incident);
+      void refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaveBusy(false);
+    }
+  }
+
+  async function saveSettings(patch: Partial<SettingsDTO>) {
+    try {
+      const d = await jfetch<{ settings: SettingsDTO }>("/api/settings", {
+        method: "PUT",
+        headers: JSON_HEADERS,
+        body: JSON.stringify(patch),
+      });
+      setSettings(d.settings);
+      setSoundOn(d.settings.alert_sound === "1");
+      toast.success("Configuración guardada");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function setUnitStatus(id: number, status: UnitStatus) {
+    try {
+      await jfetch(`/api/units/${id}`, {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ status }),
+      });
+      void refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  /** Cambiar la dotación (efectivos) de una unidad desde el tablero */
+  async function setUnitCrew(id: number, crew: number) {
+    try {
+      await jfetch(`/api/units/${id}`, {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ crew }),
+      });
+      void refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  /** «Ruta»: traza (o quita) la ruta vial en el mapa, del punto de salida del
+   * despacho (o del cuartel) a la escena — sin abrir Google Maps. */
+  async function toggleRoute(incident: IncidentDTO) {
+    if (route?.incidentId === incident.id) {
+      setRoute(null);
+      return;
+    }
+    const from =
+      incident.departLat != null && incident.departLng != null
+        ? { lat: incident.departLat, lng: incident.departLng }
+        : FIREHOUSE;
+    try {
+      const d = await jfetch<{ route: RouteDTO }>(
+        `/api/route?from=${from.lat},${from.lng}&to=${incident.lat},${incident.lng}`,
+      );
+      setRoute({ incidentId: incident.id, data: d.route });
+      toast.info(
+        d.route.estimated
+          ? `Ruta estimada en línea recta: ${fmtDistance(d.route.meters)} (OSRM no respondió)`
+          : `Ruta vial trazada: ${fmtDistance(d.route.meters)} · ~${Math.max(1, Math.round(d.route.seconds / 60))} min`,
+      );
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  function startPick() {
+    // La ventana del reporte manual ya es arrastrable: se queda abierta
+    // sobre el mapa y el clic del mapa fija la ubicación.
+    setPickFor("incident");
+    toast.info("Haz clic en el mapa para fijar la ubicación del reporte");
+  }
+
+  function startEditPick() {
+    setPickFor("incident-edit");
+  }
+
+  function startPickHydrant() {
+    // La ventana no se cierra: el mapa queda clicable detrás
+    setPickFor("hydrant");
+  }
+
+  function handlePick(lat: number, lng: number) {
+    if (pickFor === "unit") {
+      setUnitDraft((d) => ({ ...d, lat: lat.toFixed(5), lng: lng.toFixed(5) }));
+      setUnitOpen(true);
+    } else if (pickFor === "hydrant") {
+      setHydrantDraft((d) => ({ ...d, lat: lat.toFixed(5), lng: lng.toFixed(5) }));
+    } else if (pickFor === "incident-edit") {
+      setEditDraft((d) => ({ ...d, lat: lat.toFixed(5), lng: lng.toFixed(5) }));
+    } else {
+      setDraft((d) => ({ ...d, lat: lat.toFixed(5), lng: lng.toFixed(5) }));
+      setNewOpen(true);
+    }
+    if (pickFor === "incident-edit" || pickFor === "hydrant") {
+      // Sigue activo para afinar con más clics; la ventana no se cierra
+      toast.info(
+        pickFor === "hydrant"
+          ? "Ubicación del hidrante fijada en el mapa"
+          : "Ubicación de la edición actualizada en el mapa",
+      );
+    } else {
+      setPickFor(null);
+      toast.info("Ubicación fijada en el mapa");
+    }
+  }
+
+  function cancelPick() {
+    const target = pickFor;
+    setPickFor(null);
+    if (target === "unit") setUnitOpen(true);
+    else if (target === "incident") setNewOpen(true);
+    // "hydrant" e "incident-edit": solo desactiva el clic en el mapa; la ventana sigue abierta
+  }
+
+  function openNewHydrant() {
+    setHydrantDraft(EMPTY_HYDRANT_DRAFT);
+    setHydrantOpen(true);
+    // El mapa queda clicable: los clics ajustan la ubicación sin cerrar la ventana
+    setPickFor("hydrant");
+  }
+
+  async function saveHydrant() {
+    setHydrantBusy(true);
+    try {
+      const d = await jfetch<{ hydrant: HydrantDTO }>("/api/hydrants", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          code: hydrantDraft.code.trim() || null,
+          lat: Number(hydrantDraft.lat),
+          lng: Number(hydrantDraft.lng),
+          pressure: hydrantDraft.pressure,
+          diameter: Number(hydrantDraft.diameter) || null,
+          situation: hydrantDraft.situation,
+          notes: hydrantDraft.notes.trim() || null,
+          photoBase64: hydrantDraft.photo || null,
+        }),
+      });
+      toast.success(
+        `Hidrante ${d.hydrant.code ?? "sin código"} registrado · ${HYDRANT_SITUATION_META[d.hydrant.situation].label}`,
+      );
+      setHydrantOpen(false);
+      setPickFor((p) => (p === "hydrant" ? null : p));
+      setHydrantDraft(EMPTY_HYDRANT_DRAFT);
+      void refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setHydrantBusy(false);
+    }
+  }
+
+  async function setHydrantSituation(id: number, situation: HydrantSituation) {
+    try {
+      await jfetch<{ hydrant: HydrantDTO }>(`/api/hydrants/${id}`, {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ situation }),
+      });
+      toast.success(`Situación actualizada: ${HYDRANT_SITUATION_META[situation].label}`);
+      void refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+      throw e;
+    }
+  }
+
+  // ----- Unidades: alta y baja -----
+
+  function openNewUnit() {
+    setUnitDraft(EMPTY_UNIT_DRAFT);
+    setUnitOpen(true);
+  }
+
+  function startPickUnit() {
+    setUnitOpen(false);
+    setPickFor("unit");
+  }
+
+  async function saveUnit() {
+    setUnitBusy(true);
+    try {
+      const d = await jfetch<{ unit: UnitDTO }>("/api/units", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          code: unitDraft.code,
+          name: unitDraft.name,
+          type: unitDraft.type,
+          status: unitDraft.status,
+          station: unitDraft.station.trim() || null,
+          crew: unitDraft.crew.trim() === "" ? null : Number(unitDraft.crew),
+          lat: Number(unitDraft.lat),
+          lng: Number(unitDraft.lng),
+        }),
+      });
+      toast.success(`Unidad ${d.unit.code} registrada`);
+      setUnitOpen(false);
+      setUnitDraft(EMPTY_UNIT_DRAFT);
+      void refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setUnitBusy(false);
+    }
+  }
+
+  async function removeUnit(id: number) {
+    try {
+      await jfetch<{ ok: boolean }>(`/api/units/${id}`, { method: "DELETE" });
+      toast.success("Unidad dada de baja");
+      void refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+      throw e;
+    }
+  }
+
+  // ----- Render -----
+  return (
+    <div className="flex h-dvh flex-col">
+      <TopBar
+        live={live}
+        soundOn={soundOn}
+        simBusy={simBusy}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onToggleSound={() => {
+          const next = !soundOn;
+          setSoundOn(next);
+          if (next) primeAudio();
+          void saveSettings({ alert_sound: next ? "1" : "0" });
+        }}
+        onSimulate={simulate}
+        onNewReport={() => {
+          setDraft(EMPTY_DRAFT);
+          setNewOpen(true);
+        }}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenHydrants={() => setHydrantsOpen(true)}
+      />
+      <StatsStrip stats={stats} live={live} />
+
+      <main id="fw-main" className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[320px_1fr_385px]">
+        <aside className={cx("min-h-0 border-r border-line", view !== "queue" && "max-lg:hidden")}>
+          <IncidentQueue
+            incidents={incidents}
+            selectedId={selectedId}
+            lastNewId={lastNewId}
+            onSelect={(id) => select(id, true)}
+          />
+        </aside>
+
+        <section className={cx("relative min-h-0", view !== "map" && "max-lg:hidden")}>
+          <MapView
+            incidents={mapIncidents}
+            route={route?.data ?? null}
+            units={units}
+            hydrants={hydrants}
+            risks={initial.risks}
+            selectedId={selectedId}
+            nearHydrants={nearHydrants}
+            layers={layers}
+            theme={theme}
+            picking={pickFor !== null}
+            onToggleLayer={(key) => setLayers((l) => ({ ...l, [key]: !l[key] }))}
+            onSelect={(id) => select(id)}
+            onPick={handlePick}
+            onCancelPick={cancelPick}
+            onNewHydrant={openNewHydrant}
+            onHydrantSituation={setHydrantSituation}
+          />
+        </section>
+
+        <aside className={cx("min-h-0 border-l border-line", view !== "detail" && "max-lg:hidden")}>
+          <DetailPanel
+            incident={detailForSelected}
+            fallback={selectedIncident}
+            busy={detailBusy}
+            tab={tab}
+            theme={theme}
+            onTabChange={setTab}
+            hydrants={hydrants}
+            units={units}
+            activity={activity}
+            waCentralConfigured={Boolean(settings.wa_central)}
+            onDispatch={(i) => setDispatchFor(i)}
+            onStatus={changeStatus}
+            onReply={reply}
+            onNotifyCentral={notifyCentral}
+            onEdit={openEdit}
+            onSelectIncident={(id) => select(id)}
+            onSetUnitStatus={setUnitStatus}
+            onUnitsChanged={() => void refresh()}
+            onAddUnit={openNewUnit}
+            onRemoveUnit={removeUnit}
+            onSetCrew={setUnitCrew}
+            routeForId={route?.incidentId ?? null}
+            onRoute={toggleRoute}
+          />
+        </aside>
+      </main>
+
+      {/* Navegación móvil */}
+      <nav className="flex h-12 shrink-0 items-stretch border-t border-line bg-panel lg:hidden" aria-label="Vistas">
+        {(
+          [
+            ["queue", "Reportes", <ListBullets key="a" size={17} aria-hidden="true" />],
+            ["map", "Mapa", <MapTrifold key="b" size={17} aria-hidden="true" />],
+            ["detail", "Detalle", <Fire key="c" size={17} aria-hidden="true" />],
+          ] as ["queue" | "map" | "detail", string, React.ReactNode][]
+        ).map(([key, label, icon]) => (
+          <button
+            key={key}
+            className={cx(
+              "flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-bold tracking-wider uppercase",
+              view === key ? "text-red" : "text-mu",
+            )}
+            onClick={() => setView(key)}
+            aria-current={view === key ? "page" : undefined}
+          >
+            {icon}
+            <span className="flex items-center gap-1">
+              {label}
+              {key === "queue" && activeCount > 0 && (
+                <span className="rounded-sm bg-redbtn px-1 text-[9px] text-white">{activeCount}</span>
+              )}
+            </span>
+          </button>
+        ))}
+      </nav>
+
+      {/* Diálogos */}
+      {dispatchFor && (
+        <DispatchDialog
+          incident={dispatchFor}
+          units={units}
+          nearHydrants={dispatchNearHydrants}
+          waUnit={settings.wa_unit}
+          busy={dispatchBusy}
+          onClose={() => setDispatchFor(null)}
+          onConfirm={confirmDispatch}
+          onOpenSettings={() => {
+            setDispatchFor(null);
+            setSettingsOpen(true);
+          }}
+        />
+      )}
+      {newOpen && (
+        <NewIncidentDialog
+          draft={draft}
+          setDraft={setDraft}
+          busy={saveBusy}
+          units={units.filter((u) => u.status === "disponible")}
+          onClose={() => setNewOpen(false)}
+          onSave={saveNewIncident}
+          onStartPick={startPick}
+        />
+      )}
+      {editFor && (
+        <NewIncidentDialog
+          mode="edit"
+          draft={editDraft}
+          setDraft={setEditDraft}
+          busy={saveBusy}
+          onClose={() => {
+            setEditFor(null);
+            setPickFor((p) => (p === "incident-edit" ? null : p));
+          }}
+          onSave={saveEdit}
+          onStartPick={startEditPick}
+        />
+      )}
+      {hydrantOpen && (
+        <HydrantDialog
+          draft={hydrantDraft}
+          setDraft={setHydrantDraft}
+          busy={hydrantBusy}
+          onClose={() => {
+            setHydrantOpen(false);
+            setPickFor((p) => (p === "hydrant" ? null : p));
+          }}
+          onSave={saveHydrant}
+          onStartPick={startPickHydrant}
+        />
+      )}
+      {unitOpen && (
+        <NewUnitDialog
+          draft={unitDraft}
+          setDraft={setUnitDraft}
+          busy={unitBusy}
+          onClose={() => setUnitOpen(false)}
+          onSave={saveUnit}
+          onStartPick={startPickUnit}
+        />
+      )}
+      {hydrantsOpen && (
+        <HydrantsDialog
+          hydrants={hydrants}
+          onClose={() => setHydrantsOpen(false)}
+          onNewHydrant={openNewHydrant}
+          onSituationChange={setHydrantSituation}
+        />
+      )}
+      {settingsOpen && (
+        <SettingsDialog settings={settings} onSave={saveSettings} onClose={() => setSettingsOpen(false)} />
+      )}
+    </div>
+  );
+}

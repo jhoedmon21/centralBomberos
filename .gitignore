@@ -33,6 +33,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# base de datos local de desarrollo (SQLite)
+prisma/dev.db*
+
+# evidencias (fotos) subidas en desarrollo
+/uploads
+
 # vercel
 .vercel
 

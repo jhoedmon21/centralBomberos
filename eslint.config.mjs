@@ -12,7 +12,19 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Archivos estáticos servidos tal cual (p. ej. el worker de MapLibre, minificado):
+    "public/**",
   ]),
+  // src/components/ui/map.tsx es un componente vendido de mapcn (MIT, upstream
+  // https://github.com/AnmolSaini16/mapcn); se mantiene cercano al original para
+  // poder actualizarlo, así que se relajan las reglas de compilación estricta.
+  {
+    files: ["src/components/ui/map.tsx"],
+    rules: {
+      "react-hooks/refs": "off",
+      "react-hooks/set-state-in-effect": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

@@ -1,26 +1,661 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ============================================================
+   FUEGOMAP Admin · Central de Mando GIS
+   Dirección visual: Sala de operaciones táctica (refinada)
+   Grafito profundo · rojo señal · ámbar · esquinas rectas
+   Contraste calibrado a WCAG AA (texto ≥4.5:1 · UI y bordes ≥3:1)
+   Tipografía: Barlow Condensed (titulares) + Barlow (interfaz)
+   Capas: tokens → base → componentes (las utilidades pueden afinar)
+   ============================================================ */
+
+:root,
+[data-theme="dark"] {
+  --bg: #080d13;
+  --panel: #0e151f;
+  --panel-2: #151f2b;
+  --panel-3: #1d2a39;
+  --line: #21303e;
+  --line-2: #5d82ab;
+  --tx: #eaf1f8;
+  --mu: #9aadc0;
+  --mu-2: #7f94aa;
+  --red: #ff5644;
+  --red-btn: #d13e30;
+  --red-btn-hover: #c8342a;
+  --amber: #eea72c;
+  --green: #45c573;
+  --blue: #55a6f2;
+  --map-bg: #0d1419;
+  --map-bg2: #111a22;
+
+  --st-reportado: #ff4a38;
+  --st-despachado: #f5a623;
+  --st-escena: #4da3ff;
+  --st-controlado: #3fc46f;
+  --st-cerrado: #7e93a8;
+
+  --sev-critica: #ff4a38;
+  --sev-alta: #ff8a3d;
+  --sev-media: #ffc53d;
+  --sev-baja: #9fb3c8;
+
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg: #edf1f5;
+  --panel: #ffffff;
+  --panel-2: #f3f6f9;
+  --panel-3: #e7edf3;
+  --line: #d5dee7;
+  --line-2: #6d879e;
+  --tx: #101a24;
+  --mu: #51677c;
+  --mu-2: #556a82;
+  --red: #c8291a;
+  --red-btn: #c8291a;
+  --red-btn-hover: #b02417;
+  --amber: #8a5a06;
+  --green: #157940;
+  --blue: #1669c4;
+  --map-bg: #dbe4ec;
+  --map-bg2: #cfdae4;
+
+  --st-reportado: #c8291a;
+  --st-despachado: #8a5a06;
+  --st-escena: #1669c4;
+  --st-controlado: #157940;
+  --st-cerrado: #586c81;
+
+  --sev-critica: #cf2338;
+  --sev-alta: #a35104;
+  --sev-media: #7d6103;
+  --sev-baja: #55708a;
+
+  color-scheme: light;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel2: var(--panel-2);
+  --color-panel3: var(--panel-3);
+  --color-line: var(--line);
+  --color-line2: var(--line-2);
+  --color-tx: var(--tx);
+  --color-mu: var(--mu);
+  --color-mu2: var(--mu-2);
+  --color-red: var(--red);
+  --color-redbtn: var(--red-btn);
+  --color-redbtnhover: var(--red-btn-hover);
+  --color-ambert: var(--amber);
+  --color-amber: var(--amber);
+  --color-green: var(--green);
+  --color-blue: var(--blue);
+  --color-st-reportado: var(--st-reportado);
+  --color-st-despachado: var(--st-despachado);
+  --color-st-escena: var(--st-escena);
+  --color-st-controlado: var(--st-controlado);
+  --color-st-cerrado: var(--st-cerrado);
+  --color-sev-critica: var(--sev-critica);
+  --color-sev-alta: var(--sev-alta);
+  --color-sev-media: var(--sev-media);
+  --color-sev-baja: var(--sev-baja);
+  --font-display: var(--font-barlow-cond), "Arial Narrow", sans-serif;
+  --font-sans: var(--font-barlow), system-ui, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Tokens estilo shadcn usados por componentes externos (mapcn) */
+  --color-background: var(--bg);
+  --color-foreground: var(--tx);
+  --color-popover: var(--panel);
+  --color-popover-foreground: var(--tx);
+  --color-muted: var(--panel-2);
+  --color-muted-foreground: var(--mu-2);
+  --color-accent: var(--panel-3);
+  --color-border: var(--line);
+  --color-ring: var(--amber);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* El tema de la app vive en [data-theme] (no en la clase .dark de Tailwind) */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ---------- Base ---------- */
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--tx);
+    font-family: var(--font-barlow), system-ui, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* En puntero fino se corta el rebote de la página; en táctil se conservan los gestos nativos */
+  @media (pointer: fine) {
+    body {
+      overscroll-behavior: none;
+    }
+  }
+
+  /* Sin retardo de doble toque en táctil (no bloquea scroll ni pinch) */
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  label,
+  summary {
+    touch-action: manipulation;
+  }
+
+  h1,
+  h2,
+  h3,
+  .display {
+    font-family: var(--font-barlow-cond), "Arial Narrow", system-ui, sans-serif;
+    letter-spacing: 0.018em;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--red) 38%, transparent);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-2) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--line-2) 70%, transparent);
+    border-radius: 8px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--line-2);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Foco accesible (los campos .input usan anillo propio) */
+  button:focus-visible,
+  a:focus-visible,
+  .focus-ring:focus-visible,
+  [tabindex]:focus-visible,
+  input:not(.input):focus-visible,
+  select:not(.input):focus-visible,
+  textarea:not(.input):focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--amber) 80%, transparent);
+    outline-offset: 2px;
+    border-radius: 3px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ---------- Componentes ---------- */
+
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border: 1px solid var(--line-2);
+    background: var(--panel-2);
+    color: var(--tx);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.01em;
+    padding: 7px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+    transition:
+      background-color 0.15s ease-out,
+      border-color 0.15s ease-out,
+      color 0.15s ease-out,
+      opacity 0.15s ease-out,
+      transform 0.12s ease-out;
+  }
+  .btn:hover {
+    background: var(--panel-3);
+    border-color: color-mix(in srgb, var(--line-2) 72%, var(--tx));
+  }
+  .btn:active {
+    transform: translateY(1px);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-red {
+    background: var(--red-btn);
+    border-color: color-mix(in srgb, var(--red-btn) 82%, #fff);
+    color: #fff;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.14),
+      0 3px 14px -6px color-mix(in srgb, var(--red) 85%, transparent);
+  }
+  .btn-red:hover {
+    background: var(--red-btn-hover);
+    border-color: var(--red-btn-hover);
+  }
+  .btn-amber {
+    background: transparent;
+    border-color: color-mix(in srgb, var(--amber) 60%, var(--line-2));
+    color: var(--amber);
+    box-shadow: none;
+  }
+  .btn-amber:hover {
+    background: color-mix(in srgb, var(--amber) 14%, transparent);
+    border-color: var(--amber);
+  }
+  .btn-green {
+    background: transparent;
+    border-color: color-mix(in srgb, var(--green) 60%, var(--line-2));
+    color: var(--green);
+    box-shadow: none;
+  }
+  .btn-green:hover {
+    background: color-mix(in srgb, var(--green) 14%, transparent);
+    border-color: var(--green);
+  }
+  .btn-blue {
+    background: transparent;
+    border-color: color-mix(in srgb, var(--blue) 60%, var(--line-2));
+    color: var(--blue);
+    box-shadow: none;
+  }
+  .btn-blue:hover {
+    background: color-mix(in srgb, var(--blue) 14%, transparent);
+    border-color: var(--blue);
+  }
+  .btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--mu);
+    box-shadow: none;
+  }
+  .btn-ghost:hover {
+    background: var(--panel-2);
+    border-color: transparent;
+    color: var(--tx);
+  }
+  .btn-sm {
+    padding: 4px 9px;
+    font-size: 12px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 3px;
+    border: 1px solid color-mix(in srgb, currentColor 36%, transparent);
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    line-height: 1.5;
+  }
+
+  .input {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, var(--line-2) 88%, transparent);
+    background: color-mix(in srgb, var(--panel-2) 82%, var(--bg));
+    color: var(--tx);
+    font: inherit;
+    font-size: 14px;
+    transition:
+      border-color 0.15s ease-out,
+      background-color 0.15s ease-out,
+      box-shadow 0.15s ease-out;
+  }
+  .input:hover {
+    border-color: var(--line-2);
+  }
+  .input:focus {
+    outline: none;
+    border-color: var(--amber);
+    background: var(--panel-2);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 20%, transparent);
+  }
+  .input::placeholder {
+    color: var(--mu-2);
+  }
+
+  /* Modales: el scroll interno no encadena con el fondo */
+  .dialog-scroll {
+    overscroll-behavior: contain;
+  }
+
+  /* Barras de contexto (cabecera y tira de indicadores) */
+  .chrome-top {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--panel-2) 72%, var(--panel)) 0%, var(--panel) 100%);
+  }
+  .chrome-strip {
+    background: linear-gradient(180deg, var(--panel) 0%, color-mix(in srgb, var(--bg) 42%, var(--panel)) 100%);
+  }
+
+  /* Paneles flotantes sobre el mapa */
+  .map-panel {
+    background: color-mix(in srgb, var(--panel) 86%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid color-mix(in srgb, var(--line-2) 55%, transparent);
+    border-radius: 6px;
+    box-shadow:
+      0 14px 36px rgb(0 0 0 / 0.45),
+      inset 0 1px 0 rgb(255 255 255 / 0.04);
+  }
+
+  .map-float .btn,
+  .btn.map-float {
+    background: color-mix(in srgb, var(--panel) 88%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-color: color-mix(in srgb, var(--line-2) 60%, transparent);
+    box-shadow:
+      0 6px 18px rgb(0 0 0 / 0.35),
+      inset 0 1px 0 rgb(255 255 255 / 0.04);
+  }
+  .map-float .btn:hover,
+  .btn.map-float:hover {
+    background: color-mix(in srgb, var(--panel-3) 92%, transparent);
+  }
+
+  /* Tarjetas de la cola de incidentes */
+  .q-item {
+    transition: background-color 0.15s ease-out;
+  }
+  .q-item:hover {
+    background: var(--panel-2);
+  }
+  .q-item[data-sel="1"],
+  .q-item[data-sel="1"]:hover {
+    background:
+      linear-gradient(90deg, color-mix(in srgb, var(--red) 7%, transparent), transparent 60%),
+      var(--panel-2);
+  }
+
+  /* Rejilla táctica sutil para fondos */
+  .tac-grid {
+    background-image:
+      linear-gradient(color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+}
+
+/* ---------- Animaciones ---------- */
+
+@keyframes fw-pulse {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.85;
+  }
+  70% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fw-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+@keyframes fw-flash {
+  from {
+    background: color-mix(in srgb, var(--red) 22%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+@keyframes fw-slidein {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fw-flash {
+  animation: fw-flash 1.6s ease-out 1;
+}
+.anim-blink {
+  animation: fw-blink 1.4s ease-in-out infinite;
+}
+.anim-slidein {
+  animation: fw-slidein 0.22s ease-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- MapLibre (mapa táctico · componentes mapcn) ---------- */
+
+.fw-map .maplibregl-canvas {
+  outline: none;
+}
+.fw-map .maplibregl-canvas:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--amber) 80%, transparent);
+  outline-offset: -2px;
+}
+.fw-map.picking .maplibregl-canvas {
+  cursor: crosshair !important;
+}
+
+/* El contenido del popup lo pinta el componente (mapcn); el contenedor nativo queda neutro */
+.fw-map .maplibregl-popup-content {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 0;
+}
+.fw-map .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.fw-map .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.fw-map .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--panel);
+}
+.fw-map .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.fw-map .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.fw-map .maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--panel);
+}
+.fw-map .maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--panel);
+}
+.fw-map .maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--panel);
+}
+
+.fw-map .maplibregl-ctrl-scale {
+  background: color-mix(in srgb, var(--panel) 82%, transparent) !important;
+  border: 1px solid var(--line-2) !important;
+  border-top: none !important;
+  color: var(--mu) !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 0 0 5px 5px;
+}
+.fw-map .maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--panel) 78%, transparent) !important;
+  color: var(--mu-2) !important;
+  font-size: 9.5px !important;
+  padding: 1px 6px !important;
+  border-radius: 4px 0 0 0;
+}
+.fw-map .maplibregl-ctrl-attrib a {
+  color: var(--mu) !important;
+}
+
+/* ---------- Parte de emergencia (informe imprimible A4) ---------- */
+.fw-informe table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+.fw-informe th,
+.fw-informe td {
+  border: 1px solid #c8ccd2;
+  padding: 5px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.fw-informe th {
+  background: #eef1f4;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  body {
+    background: #fff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .fw-informe tr {
+    break-inside: avoid;
+  }
+}
+
+/* Marcadores tácticos */
+.mk {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.mk .ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--red) 45%, transparent);
+  animation: fw-pulse 1.9s ease-out infinite;
+}
+.mk .dot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid rgb(255 255 255 / 0.92);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.5);
+  font-family: var(--font-barlow), system-ui, sans-serif;
+  font-weight: 700;
+  color: #fff;
+}
+.mk-incident .dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+.mk-incident.sel .dot {
+  width: 32px;
+  height: 32px;
+  border-width: 2.5px;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--red) 28%, transparent),
+    0 2px 10px rgb(0 0 0 / 0.55);
+}
+.mk-hydrant .dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--blue);
+  font-size: 9.5px;
+}
+.mk-hydrant.near .dot {
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--blue) 35%, transparent),
+    0 1px 6px #0009;
+}
+.mk-risk .dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--amber);
+  color: #201400;
+  font-size: 11px;
+}
+.mk-alert .dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+.mk-unit .dot {
+  min-width: 30px;
+  height: 19px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.mk-unit .dot span {
+  color: var(--tx);
+  mix-blend-mode: normal;
+}
+
+/* ---------- Sonner (alertas) ---------- */
+
+[data-sonner-toaster] {
+  --normal-bg: var(--panel) !important;
+  --normal-border: var(--line) !important;
+  --normal-text: var(--tx) !important;
+  font-family: var(--font-barlow), system-ui, sans-serif !important;
+}
+[data-sonner-toast] {
+  border-radius: 6px !important;
+  box-shadow: 0 14px 36px rgb(0 0 0 / 0.42) !important;
 }

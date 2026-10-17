@@ -2,6 +2,10 @@
 // incidente, unidades intervinientes, hidrantes cercanos, evidencia y
 // bitácora completa. Se guarda como PDF con «Imprimir» del navegador —
 // sin dependencias externas ni servicios de pago.
+// Ruta DISPENSADA de la validación «instant»: el PDF se imprime con TODOS
+// los datos cargados (no importa que la navegación bloquee unos ms).
+
+export const instant = false;
 
 import { notFound } from "next/navigation";
 import PrintBar from "./print-bar";

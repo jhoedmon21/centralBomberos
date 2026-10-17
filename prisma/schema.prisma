@@ -1,9 +1,8 @@
 // ============================================================
-//  FuegoMap Admin · Central de Mando GIS — Esquema de base de datos
-//  SQLite (desarrollo). Para migrar a PostgreSQL:
-//    1. provider = "postgresql"
-//    2. DATABASE_URL="postgresql://usuario:clave@localhost:5432/fuegomap"
-//    3. npx prisma migrate dev
+//  B-35 Camaná · Central de Mando GIS — Esquema de base de datos
+//  PostgreSQL en Neon: url agrupada (PgBouncer) para la app y
+//  directUrl sin pooler para migraciones (prisma db push / migrate).
+//  El SQLite local (dev.db) quedó como respaldo previo a la migración.
 // ============================================================
 
 generator client {
@@ -11,8 +10,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 /// Reporte de emergencia recibido (WhatsApp, 116, manual o webhook oficial)

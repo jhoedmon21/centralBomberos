@@ -1,6 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "//": "En Vercel la base es PostgreSQL (Neon): mismo modelo que el SQLite local, otro provider. El build genera el cliente Prisma de este esquema con DATABASE_URL de producción.",
-  "buildCommand": "npx prisma generate --schema=prisma/schema.postgres.prisma && next build",
+  "buildCommand": "npx prisma generate && next build",
   "framework": "nextjs"
 }

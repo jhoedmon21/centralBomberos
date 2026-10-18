@@ -26,13 +26,13 @@ import {
   Bell,
   BellSlash,
   Broadcast,
-  Truck,
+  Clock,
   Users,
   WhatsappLogo,
   X,
 } from "@phosphor-icons/react";
 import { useClock } from "@/hooks/useClock";
-import { STATUS_META, UNIT_STATUS_META } from "@/lib/meta";
+import { STATUS_META } from "@/lib/meta";
 import { pad, timeAgo } from "@/lib/utils";
 import type {
   IncidentDTO,
@@ -128,10 +128,14 @@ export function ViperRail({
         title={live ? "Datos en tiempo real activos" : "Reconectando"}
       >
         <Broadcast size={12} className={live ? "text-green" : "text-amber anim-blink"} aria-hidden="true" />
-        <span className={`text-[9px] font-bold tracking-widest uppercase ${live ? "text-green" : "text-amber"}`}>
+        <span
+          className={`text-[9px] font-bold tracking-widest uppercase ${live ? "text-green" : "text-amber"}`}
+        >
           {live ? "En vivo" : "Reconectando"}
         </span>
       </div>
+      {/* Hora y fecha del servicio: junta al indicador de línea, no flota */}
+      <ViperClock />
 
       {/* Unidades: toque = seguir cámara (dot de estado) */}
       <div className="flex shrink-0 items-center gap-1 border-l border-line pl-2">
@@ -332,60 +336,10 @@ export function ViperDrawer(props: ViperDrawerProps) {
   );
 }
 
-/* ---------- TARJETA derecha: VEHÍCULOS en servicio ---------- */
-
-export interface ViperCardsProps {
-  units: UnitDTO[];
-  followUnitId: number | null;
-  onFollowUnit: (id: number | null) => void;
-}
-
-export function ViperCards({ units, followUnitId, onFollowUnit }: ViperCardsProps) {
-  return (
-    <div
-      className="map-panel dialog-scroll absolute right-2 top-14 z-10 flex max-h-[calc(100dvh-172px)] w-[292px] max-w-[92vw] flex-col overflow-y-auto rounded-xl p-3"
-      role="complementary"
-      aria-label="Vehículos en servicio"
-      data-b35-card="vehiculos"
-    >
-      <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-bold tracking-widest text-mu uppercase">
-        <Truck size={12} aria-hidden="true" /> Vehículos en servicio
-      </div>
-      <p className="mb-2 text-[10.5px] text-mu2">Toca un vehículo para seguir su cámara en el mapa.</p>
-      <div className="flex flex-col gap-1.5">
-        {units.map((u) => (
-          <button
-            key={u.id}
-            type="button"
-            onClick={() => onFollowUnit(followUnitId === u.id ? null : u.id)}
-            className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors ${
-              followUnitId === u.id ? "border-amber" : "border-line hover:border-line2"
-            }`}
-            style={followUnitId === u.id ? { background: "color-mix(in srgb, var(--amber) 10%, transparent)" } : undefined}
-            title={u.name}
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ background: STATUS_COLOR[u.status] }}
-                aria-hidden="true"
-              />
-              <span className="display text-[15px] font-bold tracking-wide text-tx">{u.code}</span>
-            </span>
-            <span className="truncate text-[10px] font-semibold text-mu">
-              {CLAVE_BY_STATUS[u.status]} · {UNIT_STATUS_META[u.status].label}
-            </span>
-          </button>
-        ))}
-      </div>
-      <p className="mt-2 text-[10px] leading-snug text-mu2">
-        6-0 disponible · 6-8 en ruta · 6-10 en el lugar · 6-9 regresando · F/S fuera de servicio
-      </p>
-    </div>
-  );
-}
-
 /* ---------- FRANJA de incidente + RELOJ (pie de cabina) ---------- */
+
+/* La lista de vehículos vive SOLO en el rail (dots + code + clave): no hay
+   tarjeta repetida a la derecha — menos información duplicada en pantalla. */
 
 export interface ViperStripProps {
   incident: IncidentDTO | null;
@@ -443,19 +397,26 @@ export function ViperStrip({ incident, onOpenDetail }: ViperStripProps) {
   );
 }
 
+/* ---------- RELOJ del servicio (chip del rail) ---------- */
+
 export function ViperClock() {
   const now = useClock();
-  if (!now) return <div aria-hidden="true" />;
+  if (!now) return <div aria-hidden="true" className="h-2 w-2 shrink-0" />;
   const dias = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
-  const meses = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
+  const meses = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SET", "OCT", "NOV", "DIC"];
   return (
-    <div className="absolute right-2 bottom-2 z-10 hidden text-right lg:block" aria-label="Hora del servicio">
-      <p className="text-[11px] font-bold tracking-[0.18em] text-mu">
-        {dias[now.getDay()]} {now.getDate()} / {meses[now.getMonth()]}
-      </p>
-      <p className="display text-[26px] font-bold leading-none tabular-nums text-tx drop-shadow">
+    <div
+      className="flex shrink-0 items-center gap-1.5 rounded border border-line bg-panel2/60 px-2 py-1"
+      role="timer"
+      title="Hora y fecha del servicio"
+    >
+      <Clock size={12} className="text-mu" aria-hidden="true" />
+      <strong className="display text-[13.5px] font-bold leading-none tabular-nums text-tx">
         {pad(now.getHours())}:{pad(now.getMinutes())}:{pad(now.getSeconds())}
-      </p>
+      </strong>
+      <span className="text-[9px] font-bold tracking-wider text-mu2">
+        {dias[now.getDay()]} {pad(now.getDate())}/{meses[now.getMonth()]}
+      </span>
     </div>
   );
 }

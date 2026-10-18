@@ -42,7 +42,7 @@ import AuditDialog from "./AuditDialog";
 import MiClaveDialog from "./MiClaveDialog";
 import PreplanViewDialog from "./PreplanViewDialog";
 import UsersDialog from "./UsersDialog";
-import { ViperCards, ViperClock, ViperDrawer, ViperRail, ViperStrip } from "./ViperChrome";
+import { ViperClock, ViperDrawer, ViperRail, ViperStrip } from "./ViperChrome";
 import type { LayersState } from "./MapView";
 
 const MapView = dynamic(() => import("./MapView"), {
@@ -911,15 +911,9 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         )}
 
       <main className="relative min-h-0 flex-1">
-        {/* Franja del incidente en pantalla + reloj de servicio (pie de cabina) */}
+        {/* Franja del incidente en pantalla (pie de cabina) */}
         <ViperStrip incident={selectedIncident} onOpenDetail={() => setDetailOpen(true)} />
-        <ViperClock />
 
-        {/* Tarjeta de vehículos mientras el panel de detalle o el chat no
-            ocupen ese costado */}
-        {!detailOpen && chatUnitId == null && (
-          <ViperCards units={units} followUnitId={followUnitId} onFollowUnit={setFollowUnitId} />
-        )}
         {/* Reportes: tarjeta flotante IZQUIERDA sobre el mapa */}
         {queueOpen && (
           <aside

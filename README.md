@@ -258,6 +258,19 @@ El código de negocio no cambia: todo pasa por Prisma.
 - **Búsqueda de direcciones**: `/api/geocode` consulta Nominatim (OpenStreetMap) con `User-Agent` propio y caché de 1 hora, según su política de uso; para producción se puede sustituir por Google Geocoding o TomTom con key.
 - Los datos sembrados son de ejemplo (Camaná): incidentes (algunos con foto de evidencia), 6 unidades con su inventario de materiales, 12 hidrantes con situación y puntos de riesgo.
 
+## ☁️ Despliegue en Vercel
+
+| App | Producción | Repo |
+| --- | --- | --- |
+| Central (Next.js) | https://b35-central.vercel.app | `jhoedmon21/centralBomberos` |
+| Tablet (PWA Vite) | https://b35-unidades.vercel.app | `jhoedmon21/b35-unidades` |
+
+- **Doble entrada de la tablet**: su propio dominio (proxy `/api → central` vía `unidades/vercel.json`) **y** `https://b35-central.vercel.app/app` — la misma PWA servida bajo el dominio central (rewrite con `TABLET_APP_URL`): **mismo origen**, cookies httpOnly y SSE sin CORS. Los assets/manifest/SW de la PWA son **relativos** (`base: "./"`), por eso funciona en ambos contextos.
+- **Variables de entorno (Vercel → Production)**: `DATABASE_URL` (Neon agrupada), `DATABASE_URL_UNPOOLED`, `JWT_SECRET`, `WA_VERIFY_TOKEN`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `OSRM_BASE_URL`, `NEON_BRANCH`, `TABLET_APP_URL`. Ojo: el `webhook_token` guardado en **Configuración** de la central tiene prioridad sobre el env.
+- **Build del central**: `npx prisma generate && next build` (vercel.json). La sesión del CAD es cookie httpOnly `fm_op` (12 h).
+- **Desplegar**: `vercel --prod` en cada carpeta (o conecta GitHub en Vercel → Settings → Login Connections y cada `git push` despliega solo).
+- **Nota (plan Hobby)**: las conexiones SSE se cortan al llegar al tope de duración de función; la app reconecta sola y los avisos críticos llegan por Web Push.
+
 ## 🎨 Diseño
 
 Tema táctico con tokens CSS (`src/app/globals.css`): grafito azulado profundo, rojo reservado a emergencias (`--red`) y ámbar para controles (`--amber`), esquinas rectas, alta densidad. Colores de estado (`--st-*`) y severidad (`--sev-*`) centralizados; los marcadores del mapa usan estos tokens (se adaptan al tema). El tema claro se activa con `data-theme="light"` y se recuerda en `localStorage` (`fw-theme`). Tipografía Barlow / Barlow Condensed.

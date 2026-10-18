@@ -34,13 +34,13 @@ export const viewport: Viewport = {
 };
 
 // Aplica el tema guardado antes del primer pintado (evita destello)
-const themeScript = `try{var t=localStorage.getItem("fw-theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t)}else{document.documentElement.setAttribute("data-theme","dark")}}catch(e){}`;
+const themeScript = `try{var t=localStorage.getItem("fw-theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t)}else{document.documentElement.setAttribute("data-theme","light")}}catch(e){}`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="es"
-      data-theme="dark"
+      data-theme="light"
       suppressHydrationWarning
       className={`${barlow.variable} ${barlowCondensed.variable}`}
     >

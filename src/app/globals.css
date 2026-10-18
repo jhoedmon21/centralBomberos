@@ -385,6 +385,12 @@
       0 14px 36px rgb(0 0 0 / 0.45),
       inset 0 1px 0 rgb(255 255 255 / 0.04);
   }
+  /* En modo claro la sombra debe susurrar, no aplastar (look tablet) */
+  [data-theme="light"] .map-panel {
+    box-shadow:
+      0 10px 28px rgb(12 36 54 / 0.14),
+      inset 0 1px 0 rgb(255 255 255 / 0.55);
+  }
 
   .map-float .btn,
   .btn.map-float {

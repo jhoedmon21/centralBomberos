@@ -1,8 +1,8 @@
 "use client";
 
 // ============================================================
-//  Cromo VIPER GO de la CAD central — mismo diseño que la tablet
-//  (cabina) pero con TODA la funcionalidad real del CAD:
+//  Cromo de cabina B-35 de la CAD central — mismas señales que la
+//  tablet del chofer pero con TODA la funcionalidad real del CAD:
 //   · Rail superior: marca, en vivo, unidades y píldoras rápidas
 //   · Cajón (drawer): TODOS los módulos + diagnóstico del turno
 //   · Tarjetas derechas: Sugerencia, Claves y Vehículos (datos vivos)
@@ -63,11 +63,11 @@ const STATUS_COLOR: Record<UnitStatus, string> = {
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <span className="flex items-baseline gap-1 leading-none select-none">
+    <span className="flex items-baseline gap-1.5 leading-none select-none">
       <span className={`display font-bold tracking-wide ${compact ? "text-[15px]" : "text-[19px]"}`}>
-        VIPER <span className="text-red">GO</span>
+        B<span className="text-red">-35</span>
       </span>
-      {!compact && <span className="text-[9px] font-bold tracking-[0.2em] text-mu2">CAD B·35</span>}
+      {!compact && <span className="text-[9px] font-bold tracking-[0.2em] text-mu2 uppercase">Central de mando</span>}
     </span>
   );
 }
@@ -112,7 +112,7 @@ export function ViperRail({
   return (
     <header
       className="chrome-top absolute inset-x-0 top-0 z-20 flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-line px-2"
-      aria-label="Cabina VIPER"
+      aria-label="Cabina B-35"
     >
       {/* Marca + cajón */}
       <button
@@ -134,7 +134,7 @@ export function ViperRail({
       >
         <Broadcast size={12} className={live ? "text-green" : "text-amber anim-blink"} aria-hidden="true" />
         <span className={`text-[9px] font-bold tracking-widest uppercase ${live ? "text-green" : "text-amber"}`}>
-          {live ? "En vivo" : "Recon."}
+          {live ? "En vivo" : "Reconectando"}
         </span>
       </div>
 
@@ -264,7 +264,7 @@ export function ViperDrawer(props: ViperDrawerProps) {
     <div
       className="absolute left-2 top-14 bottom-2 z-40 flex w-[300px] max-w-[84vw] flex-col overflow-hidden rounded-xl border border-line bg-panel/95 shadow-2xl backdrop-blur"
       role="dialog"
-      aria-label="Cajón de módulos VIPER"
+      aria-label="Cajón de módulos B-35"
     >
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <Brand />
@@ -372,12 +372,13 @@ export function ViperCards({ incident, units, followUnitId, canDispatch, onFollo
   return (
     <div className="dialog-scroll absolute right-2 top-14 z-10 flex w-[292px] max-w-[92vw] flex-col gap-2 overflow-y-auto pb-2" role="complementary" aria-label="Tarjetas operativas">
       {/* SUGERENCIA — unidad más cercana disponible para el incidente en pantalla */}
-      <div className="map-panel rounded-xl p-3" data-viper-card="sugerencia">
+      <div className="map-panel rounded-xl p-3" data-b35-card="sugerencia">
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-1.5 rounded-full bg-green/15 px-2 py-0.5 text-[10.5px] font-bold text-green">
-            <WhatsappLogo size={12} aria-hidden="true" /> Sugerencia
+            <Truck size={12} aria-hidden="true" /> Sugerencia de despacho
           </span>
         </div>
+        <p className="mt-1 text-[10.5px] text-mu2">La unidad libre más cercana a la emergencia en pantalla.</p>
         {sugerida ? (
           <div className="mt-1 flex items-center justify-between gap-2">
             <span className="display text-3xl font-bold tracking-wider text-green">{sugerida.code}</span>
@@ -396,16 +397,16 @@ export function ViperCards({ incident, units, followUnitId, canDispatch, onFollo
         )}
         {sugerida && sugMeters != null && (
           <p className="text-[10.5px] text-mu2">
-            A <span className="font-mono">{Math.round(sugMeters / 10) * 10} m</span> de la escena · toque para despachar
+            Distancia a la escena: <span className="font-mono">{Math.round(sugMeters / 10) * 10} m</span>
           </p>
         )}
       </div>
 
       {/* CLAVES — estado vivo de cada unidad con su clave radial */}
-      <div className="map-panel rounded-xl p-3" data-viper-card="claves">
+      <div className="map-panel rounded-xl p-3" data-b35-card="claves">
         <div className="mb-2 flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-[10.5px] font-bold tracking-widest text-mu uppercase">
-            <Fire size={12} className="text-red" aria-hidden="true" /> Claves
+            <Fire size={12} className="text-red" aria-hidden="true" /> Claves radiales
           </span>
         </div>
         <div className="grid grid-cols-2 gap-1.5">
@@ -428,9 +429,12 @@ export function ViperCards({ incident, units, followUnitId, canDispatch, onFollo
             </button>
           ))}
         </div>
+        <p className="mt-1.5 text-[10px] leading-snug text-mu2">
+          6-0 disponible · 6-8 en ruta · 6-10 en el lugar · 6-9 regresando
+        </p>
         <button
           type="button"
-          className="mt-1.5 w-full rounded-lg border px-2.5 py-1.5 text-[11.5px] font-bold text-green hover:border-green/40"
+          className="mt-1 w-full rounded-lg border px-2.5 py-1.5 text-[11.5px] font-bold text-green hover:border-green/40"
           style={{ background: showAll ? "color-mix(in srgb, var(--green) 22%, transparent)" : undefined }}
           onClick={() => setShowAll((v) => !v)}
         >
@@ -439,7 +443,7 @@ export function ViperCards({ incident, units, followUnitId, canDispatch, onFollo
       </div>
 
       {/* VEHÍCULOS — flota completa con su estado */}
-      <div className="map-panel rounded-xl p-3" data-viper-card="vehiculos">
+      <div className="map-panel rounded-xl p-3" data-b35-card="vehiculos">
         <div className="mb-2 flex items-center gap-1.5 text-[10.5px] font-bold tracking-widest text-mu uppercase">
           <Truck size={12} aria-hidden="true" /> Vehículos
         </div>

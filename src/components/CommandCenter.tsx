@@ -103,7 +103,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
   const [tab, setTab] = useState<DetailTab>("detalle");
   // Paneles flotantes sobre el mapa (mismo diseño de cabina que la tablet):
   // el mapa SIEMPRE queda a fondo; Reportes y Detalle son tarjetas flotantes.
-  // CAJÓN VIPER: menú de módulos sobre el mapa (abierto por defecto en
+  // CAJÓN B-35: menú de módulos sobre el mapa (abierto por defecto en
   // escritorio, como el diseño de referencia).
   const [queueOpen, setQueueOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -134,7 +134,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
     radius: true,
   });
 
-  // En escritorio la cabina abre con el CAJÓN VIPER visible (estado de la
+  // En escritorio la cabina abre con el CAJÓN B-35 visible (estado de la
   // imagen de referencia); los paneles Reportes/Detalle quedan a un clic.
   useEffect(() => {
     const wide = window.innerWidth >= 1024;

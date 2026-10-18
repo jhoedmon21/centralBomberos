@@ -1162,6 +1162,16 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
           onStartPick={startEditPick}
         />
       )}
+      {unitOpen && (
+        <NewUnitDialog
+          draft={unitDraft}
+          setDraft={setUnitDraft}
+          busy={unitBusy}
+          onClose={() => setUnitOpen(false)}
+          onSave={saveUnit}
+          onStartPick={startPickUnit}
+        />
+      )}
       {hydrantOpen && (
         <HydrantDialog
           draft={hydrantDraft}
@@ -1173,16 +1183,6 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
           }}
           onSave={saveHydrant}
           onStartPick={startPickHydrant}
-        />
-      )}
-      {unitOpen && (
-        <NewUnitDialog
-          draft={unitDraft}
-          setDraft={setUnitDraft}
-          busy={unitBusy}
-          onClose={() => setUnitOpen(false)}
-          onSave={saveUnit}
-          onStartPick={startPickUnit}
         />
       )}
       {hydrantsOpen && (

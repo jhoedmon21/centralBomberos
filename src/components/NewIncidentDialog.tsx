@@ -193,7 +193,7 @@ export default function NewIncidentDialog({ draft, setDraft, busy, mode = "creat
     <div
       ref={dialogRef}
       tabIndex={-1}
-      className="fixed inset-0 z-[1000] grid place-items-center p-4 pointer-events-none bg-black/15"
+      className="fixed inset-0 z-[1100] grid place-items-center p-4 pointer-events-none bg-black/25"
       role="dialog"
       aria-label={editing ? "Editar reporte" : "Nuevo reporte manual"}
     >

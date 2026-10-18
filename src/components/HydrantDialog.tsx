@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useDraggablePanel } from "@/hooks/useDraggablePanel";
-import { Crosshair, DotsSixVertical, Drop, MapPin, X } from "@phosphor-icons/react";
+import { Crosshair, Drop, DotsSixVertical, MapPin, UploadSimple, X } from "@phosphor-icons/react";
 import { CITY_CENTER } from "@/lib/geo";
 import { HYDRANT_DIAMETERS, HYDRANT_PRESSURES, HYDRANT_SITUATION_META } from "@/lib/meta";
 import type { HydrantSituation } from "@/lib/types";
@@ -120,7 +120,7 @@ export default function HydrantDialog({ draft, setDraft, busy, onClose, onSave, 
     <div
       ref={dialogRef}
       tabIndex={-1}
-      className="fixed inset-0 z-[1000] grid place-items-center bg-black/15 p-4 pointer-events-none"
+      className="fixed inset-0 z-[1100] grid place-items-center bg-black/25 p-4 pointer-events-none"
       role="dialog"
       aria-label="Registrar hidrante"
     >
@@ -150,7 +150,7 @@ export default function HydrantDialog({ draft, setDraft, busy, onClose, onSave, 
           <DotsSixVertical size={13} weight="bold" className="shrink-0 text-mu2" aria-hidden="true" />
           <span>
             Arrastra la ventana desde el título y{" "}
-            <span className="font-semibold text-fg">haz clic en el mapa</span> para ubicar el hidrante.
+            <span className="font-semibold text-amber">haz clic en el mapa</span> para ubicar el hidrante.
           </span>
           {(dragging || panelStyle) && (
             <button type="button" className="btn btn-sm btn-ghost ml-auto shrink-0" onClick={dragReset}>
@@ -160,6 +160,7 @@ export default function HydrantDialog({ draft, setDraft, busy, onClose, onSave, 
         </p>
 
         <div className="dialog-scroll min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+          <p className="text-[10px] font-bold tracking-[0.22em] text-mu2 uppercase">Identificación</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-[11px] font-bold tracking-wider text-mu2 uppercase" htmlFor="nh-code">
@@ -235,10 +236,18 @@ export default function HydrantDialog({ draft, setDraft, busy, onClose, onSave, 
             </div>
           </div>
 
+          <p className="flex items-center justify-between pt-1 text-[10px] font-bold tracking-[0.22em] text-mu2 uppercase">
+            Ubicación *
+            <span
+              className={cx(
+                "rounded px-1.5 py-0.5 text-[10px] leading-none font-bold normal-case",
+                invalid ? "bg-red/15 text-red" : "bg-green/15 text-green",
+              )}
+            >
+              {invalid ? "✗ fuera de rango" : "✓ válidas"}
+            </span>
+          </p>
           <div>
-            <label className="mb-1 block text-[11px] font-bold tracking-wider text-mu2 uppercase">
-              Ubicación *
-            </label>
             <div className="grid grid-cols-2 gap-3">
               <input
                 className="input font-mono text-[12.5px]"
@@ -267,6 +276,7 @@ export default function HydrantDialog({ draft, setDraft, busy, onClose, onSave, 
             </div>
           </div>
 
+          <p className="pt-1 text-[10px] font-bold tracking-[0.22em] text-mu2 uppercase">Evidencia</p>
           <div>
             <label className="mb-1 block text-[11px] font-bold tracking-wider text-mu2 uppercase" htmlFor="nh-notes">
               Observaciones
@@ -282,9 +292,9 @@ export default function HydrantDialog({ draft, setDraft, busy, onClose, onSave, 
           </div>
 
           <div>
-            <label className="mb-1 block text-[11px] font-bold tracking-wider text-mu2 uppercase" htmlFor="nh-photo">
+            <p className="mb-1 block text-[11px] font-bold tracking-wider text-mu2 uppercase">
               Foto de la boca (opcional)
-            </label>
+            </p>
             {draft.photo ? (
               <div className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -305,14 +315,22 @@ export default function HydrantDialog({ draft, setDraft, busy, onClose, onSave, 
                 </button>
               </div>
             ) : (
-              <input
-                id="nh-photo"
-                type="file"
-                accept="image/*"
-                name="photo"
-                className="block w-full cursor-pointer rounded border border-dashed border-line2 bg-panel2 px-2 py-1.5 text-[12px] text-mu file:mr-2 file:rounded file:border-0 file:bg-line file:px-2 file:py-1 file:text-[11.5px] file:font-semibold file:text-fg"
-                onChange={(e) => pickPhoto(e.target.files?.[0] ?? null)}
-              />
+              <label
+                htmlFor="nh-photo"
+                className="flex cursor-pointer flex-col items-center gap-1 rounded border border-dashed border-line2 bg-panel2 px-3 py-4 text-center text-[12.5px] text-mu transition-colors hover:border-blue/60 hover:text-tx"
+              >
+                <UploadSimple size={18} className="text-blue" aria-hidden="true" />
+                <span className="font-semibold">Elegir foto de la boca</span>
+                <span className="text-[10.5px] text-mu2">JPG o PNG · máx 5 MB (opcional)</span>
+                <input
+                  id="nh-photo"
+                  type="file"
+                  accept="image/*"
+                  name="photo"
+                  className="sr-only"
+                  onChange={(e) => pickPhoto(e.target.files?.[0] ?? null)}
+                />
+              </label>
             )}
             {photoError && (
               <p role="alert" className="mt-1 text-[11.5px] font-semibold text-red">

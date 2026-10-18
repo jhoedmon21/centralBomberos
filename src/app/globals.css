@@ -349,9 +349,21 @@
     color: var(--mu-2);
   }
 
-  /* Modales: el scroll interno no encadena con el fondo */
+  /* Modales: el scroll interno no encadena con el fondo… y va fino */
   .dialog-scroll {
     overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--panel-3) transparent;
+  }
+  .dialog-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .dialog-scroll::-webkit-scrollbar-thumb {
+    background: var(--panel-3);
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
   }
 
   /* Barras de contexto (cabecera y tira de indicadores) */

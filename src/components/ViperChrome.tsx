@@ -35,6 +35,7 @@ import {
 } from "@phosphor-icons/react";
 import { useClock } from "@/hooks/useClock";
 import { haversineM } from "@/lib/geo";
+import { STATUS_META, UNIT_STATUS_META } from "@/lib/meta";
 import { pad, timeAgo } from "@/lib/utils";
 import type {
   IncidentDTO,
@@ -244,7 +245,7 @@ function MenuItem({
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13.5px] font-semibold transition-colors hover:bg-panel2/80 ${
+      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13.5px] font-semibold transition-[background-color,transform] hover:translate-x-0.5 hover:bg-panel2/80 ${
         tone === "danger" ? "text-red" : "text-tx"
       }`}
     >
@@ -279,7 +280,7 @@ export function ViperDrawer(props: ViperDrawerProps) {
         <p className="text-[12.5px] font-bold">{op.name} · {op.role === "jefe" ? "Jefe" : op.role === "operador" ? "Operador" : "Lectura"}</p>
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-2" aria-label="Módulos del CAD">
+      <nav className="dialog-scroll min-h-0 flex-1 overflow-y-auto px-2 py-2" aria-label="Módulos del CAD">
         <MenuItem icon={<WhatsappLogo size={17} className="text-green" />} label="Simular reporte" onClick={props.onSimulate} />
         <MenuItem icon={<Plus size={17} />} label="Nuevo reporte" onClick={props.onNewReport} />
         <MenuItem icon={<Drop size={17} className="text-blue" />} label="Grifos / hidrantes" onClick={props.onOpenHydrants} />
@@ -369,7 +370,7 @@ export function ViperCards({ incident, units, followUnitId, canDispatch, onFollo
   const clavesUnits = showAll ? units : units.filter((u) => u.status !== "fuera_servicio");
 
   return (
-    <div className="absolute right-2 top-14 z-10 flex w-[292px] max-w-[92vw] flex-col gap-2 overflow-y-auto pb-2" role="complementary" aria-label="Tarjetas operativas">
+    <div className="dialog-scroll absolute right-2 top-14 z-10 flex w-[292px] max-w-[92vw] flex-col gap-2 overflow-y-auto pb-2" role="complementary" aria-label="Tarjetas operativas">
       {/* SUGERENCIA — unidad más cercana disponible para el incidente en pantalla */}
       <div className="map-panel rounded-xl p-3" data-viper-card="sugerencia">
         <div className="flex items-center justify-between gap-2">
@@ -378,15 +379,18 @@ export function ViperCards({ incident, units, followUnitId, canDispatch, onFollo
           </span>
         </div>
         {sugerida ? (
-          <button
-            type="button"
-            className="display mt-1 block w-full text-left text-3xl font-bold tracking-wider text-green"
-            onClick={onDispatch}
-            disabled={!canDispatch}
-            title={canDispatch ? `Despachar ${sugerida.code} al incidente` : "El incidente de fondo ya no está activo"}
-          >
-            {sugerida.code}
-          </button>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <span className="display text-3xl font-bold tracking-wider text-green">{sugerida.code}</span>
+            <button
+              type="button"
+              onClick={onDispatch}
+              disabled={!canDispatch}
+              className="btn btn-sm btn-blue shrink-0"
+              title={canDispatch ? `Despachar ${sugerida.code} al incidente en pantalla` : "El incidente de fondo ya no está activo"}
+            >
+              Despachar
+            </button>
+          </div>
         ) : (
           <p className="mt-1 text-[12px] text-mu">Sin unidades disponibles cerca.</p>
         )}
@@ -452,7 +456,7 @@ export function ViperCards({ incident, units, followUnitId, canDispatch, onFollo
             >
               <span className="h-2 w-2 rounded-full" style={{ background: STATUS_COLOR[u.status] }} aria-hidden="true" />
               {u.code}
-              <span className="text-[9.5px] font-semibold text-mu2">({u.status === "fuera_servicio" ? "F/S" : u.status === "disponible" ? "libre" : u.status === "en_ruta" ? "en ruta" : u.status === "en_escena" ? "en escena" : "regresando"})</span>
+              <span className="text-[9.5px] font-semibold text-mu2">({UNIT_STATUS_META[u.status].label})</span>
             </button>
           ))}
         </div>
@@ -478,7 +482,6 @@ export function ViperStrip({ incident, onOpenDetail }: ViperStripProps) {
       </div>
     );
   }
-  const meta = incident.status;
   const when = new Date(incident.createdAt);
   return (
     <div className="absolute bottom-16 left-1/2 z-10 w-[min(92vw,540px)] -translate-x-1/2 lg:bottom-2" role="status">
@@ -493,15 +496,27 @@ export function ViperStrip({ incident, onOpenDetail }: ViperStripProps) {
           <Siren size={20} weight="fill" aria-hidden="true" />
         </button>
         <button type="button" onClick={onOpenDetail} className="min-w-0 flex-1 text-left">
-          <p className="flex items-center gap-2 text-[10px] font-semibold tracking-wider text-mu uppercase">
-            <span>{when ? `${pad(when.getDate())}-${pad(when.getMonth() + 1)}-${when.getFullYear()} · ${pad(when.getHours())}:${pad(when.getMinutes())}:${pad(when.getSeconds())}` : ""}</span>
-            <span className="text-mu2">·</span>
-            <span>{meta === "reportado" ? "recién reportado" : meta === "despachado" ? "despachado" : meta === "en_escena" ? "en escena" : meta === "controlado" ? "controlado" : "cerrado"}</span>
+          <p className="flex flex-wrap items-center gap-1.5 text-[10px] font-semibold tracking-wider text-mu uppercase">
+            <span>
+              {when ? `${pad(when.getDate())}-${pad(when.getMonth() + 1)}-${when.getFullYear()} · ${pad(when.getHours())}:${pad(when.getMinutes())}:${pad(when.getSeconds())}` : ""}
+            </span>
+            <span
+              className="rounded-full px-1.5 py-0.5 text-[9.5px] font-bold uppercase"
+              style={{
+                color: `var(${STATUS_META[incident.status].varName})`,
+                background: `color-mix(in srgb, var(${STATUS_META[incident.status].varName}) 18%, transparent)`,
+              }}
+            >
+              {STATUS_META[incident.status].label}
+            </span>
             <span className="text-mu2">·</span>
             <span className="truncate">{timeAgo(incident.createdAt)}</span>
           </p>
           <p className="truncate text-[14.5px] font-bold leading-tight">{incident.title}</p>
-          <p className="truncate text-[11px] text-mu">{incident.address}{incident.notes ? ` — ${incident.notes}` : ""}</p>
+          <p className="truncate text-[11px] text-mu">
+            {incident.address}
+            {incident.notes ? ` — ${incident.notes}` : ""}
+          </p>
         </button>
       </div>
     </div>

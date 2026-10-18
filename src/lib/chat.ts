@@ -54,11 +54,9 @@ export async function chatSend(unitId: number, fromRole: ChatRole, body: string)
   const msg = await prisma.chatMessage.create({ data: { unitId, fromRole, body: clean } });
   broadcast({
     type: "chat",
-    id: msg.id,
     unitId,
-    from: fromRole,
-    body: clean,
-    at: msg.at.toISOString(),
+    // Anidado (como consumen la central y la tablet): { ev.chat.id, .from, .body, .at }
+    chat: { id: msg.id, unitId, from: fromRole, body: clean, at: msg.at.toISOString() },
   });
   return { id: msg.id, from: fromRole, body: clean, at: msg.at.toISOString() };
 }

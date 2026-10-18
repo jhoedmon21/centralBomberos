@@ -5,14 +5,12 @@
 //  tablet del chofer pero con TODA la funcionalidad real del CAD:
 //   · Rail superior: marca, en vivo, unidades y píldoras rápidas
 //   · Cajón (drawer): TODOS los módulos + diagnóstico del turno
-//   · Tarjetas derechas: Sugerencia, Claves y Vehículos (datos vivos)
+//   · Tarjeta derecha: Vehículos en servicio (datos vivos)
 //   · Franja de incidente + reloj de servicio
 // ============================================================
 
 import Link from "next/link";
-import { useState } from "react";
 import {
-  Buildings,
   ChartBar,
   Drop,
   Fire,
@@ -34,7 +32,6 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { useClock } from "@/hooks/useClock";
-import { haversineM } from "@/lib/geo";
 import { STATUS_META, UNIT_STATUS_META } from "@/lib/meta";
 import { pad, timeAgo } from "@/lib/utils";
 import type {
@@ -88,7 +85,6 @@ export interface ViperRailProps {
   onSimulate: () => void;
   onNewReport: () => void;
   onOpenHydrants: () => void;
-  onOpenPreplans: () => void;
   onFollowUnit: (id: number | null) => void;
 }
 
@@ -106,7 +102,6 @@ export function ViperRail({
   onSimulate,
   onNewReport,
   onOpenHydrants,
-  onOpenPreplans,
   onFollowUnit,
 }: ViperRailProps) {
   return (
@@ -167,9 +162,6 @@ export function ViperRail({
       <button type="button" className="btn btn-sm btn-red shrink-0" onClick={onOpenHydrants} title="Directorio de hidrantes (grifos)">
         <Drop size={14} aria-hidden="true" /> <span className="hidden sm:inline">Grifos</span>
       </button>
-      <button type="button" className="btn btn-sm btn-red shrink-0" onClick={onOpenPreplans} title="Planos de emergencia (preplans)">
-        <Buildings size={14} aria-hidden="true" /> <span className="hidden sm:inline">Planos</span>
-      </button>
       <button type="button" className="btn btn-sm btn-red shrink-0" onClick={onNewReport} title="Registrar un reporte manual">
         <Plus size={14} weight="bold" aria-hidden="true" /> <span className="hidden sm:inline">Nuevo</span>
       </button>
@@ -220,7 +212,6 @@ export interface ViperDrawerProps {
   onSimulate: () => void;
   onNewReport: () => void;
   onOpenHydrants: () => void;
-  onOpenPreplans: () => void;
   onOpenUsers: () => void;
   onOpenAudit: () => void;
   onOpenMiClave: () => void;
@@ -284,7 +275,6 @@ export function ViperDrawer(props: ViperDrawerProps) {
         <MenuItem icon={<WhatsappLogo size={17} className="text-green" />} label="Simular reporte" onClick={props.onSimulate} />
         <MenuItem icon={<Plus size={17} />} label="Nuevo reporte" onClick={props.onNewReport} />
         <MenuItem icon={<Drop size={17} className="text-blue" />} label="Grifos / hidrantes" onClick={props.onOpenHydrants} />
-        <MenuItem icon={<Buildings size={17} className="text-amber" />} label="Planos de emergencia" onClick={props.onOpenPreplans} />
         <MenuItem icon={<ListBullets size={17} />} label="Reportes (lista viva)" onClick={props.onOpenQueue} />
         <MenuItem icon={<GearSix size={17} />} label="Preferencias de la central" onClick={props.onOpenSettings} />
         <MenuItem icon={<Key size={17} />} label="Mi clave" onClick={props.onOpenMiClave} />
@@ -342,129 +332,55 @@ export function ViperDrawer(props: ViperDrawerProps) {
   );
 }
 
-/* ---------- TARJETAS derechas (Sugerencia · Claves · Vehículos) ---------- */
+/* ---------- TARJETA derecha: VEHÍCULOS en servicio ---------- */
 
 export interface ViperCardsProps {
-  incident: IncidentDTO | null;
   units: UnitDTO[];
   followUnitId: number | null;
-  canDispatch: boolean;
   onFollowUnit: (id: number | null) => void;
-  onDispatch: () => void;
 }
 
-export function ViperCards({ incident, units, followUnitId, canDispatch, onFollowUnit, onDispatch }: ViperCardsProps) {
-  const [showAll, setShowAll] = useState(false);
-
-  // Sugerencia: la unidad DISPOSICCIÓN más cercana al incidente seleccionado
-  const sugerida = (() => {
-    if (!incident || !incident.lat || !incident.lng) return null;
-    const pool = units.filter((u) => u.status === "disponible" && u.lat != null && u.lng != null);
-    if (pool.length === 0) return null;
-    return pool.reduce((best, u) =>
-      haversineM(incident.lat, incident.lng, u.lat!, u.lng!) < haversineM(incident.lat, incident.lng, best.lat!, best.lng!) ? u : best,
-    );
-  })();
-  const sugMeters = sugerida && incident ? haversineM(incident.lat, incident.lng, sugerida.lat!, sugerida.lng!) : null;
-
-  const clavesUnits = showAll ? units : units.filter((u) => u.status !== "fuera_servicio");
-
+export function ViperCards({ units, followUnitId, onFollowUnit }: ViperCardsProps) {
   return (
-    <div className="dialog-scroll absolute right-2 top-14 z-10 flex w-[292px] max-w-[92vw] flex-col gap-2 overflow-y-auto pb-2" role="complementary" aria-label="Tarjetas operativas">
-      {/* SUGERENCIA — unidad más cercana disponible para el incidente en pantalla */}
-      <div className="map-panel rounded-xl p-3" data-b35-card="sugerencia">
-        <div className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1.5 rounded-full bg-green/15 px-2 py-0.5 text-[10.5px] font-bold text-green">
-            <Truck size={12} aria-hidden="true" /> Sugerencia de despacho
-          </span>
-        </div>
-        <p className="mt-1 text-[10.5px] text-mu2">La unidad libre más cercana a la emergencia en pantalla.</p>
-        {sugerida ? (
-          <div className="mt-1 flex items-center justify-between gap-2">
-            <span className="display text-3xl font-bold tracking-wider text-green">{sugerida.code}</span>
-            <button
-              type="button"
-              onClick={onDispatch}
-              disabled={!canDispatch}
-              className="btn btn-sm btn-blue shrink-0"
-              title={canDispatch ? `Despachar ${sugerida.code} al incidente en pantalla` : "El incidente de fondo ya no está activo"}
-            >
-              Despachar
-            </button>
-          </div>
-        ) : (
-          <p className="mt-1 text-[12px] text-mu">Sin unidades disponibles cerca.</p>
-        )}
-        {sugerida && sugMeters != null && (
-          <p className="text-[10.5px] text-mu2">
-            Distancia a la escena: <span className="font-mono">{Math.round(sugMeters / 10) * 10} m</span>
-          </p>
-        )}
+    <div
+      className="map-panel dialog-scroll absolute right-2 top-14 z-10 flex max-h-[calc(100dvh-172px)] w-[292px] max-w-[92vw] flex-col overflow-y-auto rounded-xl p-3"
+      role="complementary"
+      aria-label="Vehículos en servicio"
+      data-b35-card="vehiculos"
+    >
+      <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-bold tracking-widest text-mu uppercase">
+        <Truck size={12} aria-hidden="true" /> Vehículos en servicio
       </div>
-
-      {/* CLAVES — estado vivo de cada unidad con su clave radial */}
-      <div className="map-panel rounded-xl p-3" data-b35-card="claves">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="flex items-center gap-1.5 text-[10.5px] font-bold tracking-widest text-mu uppercase">
-            <Fire size={12} className="text-red" aria-hidden="true" /> Claves radiales
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          {clavesUnits.slice(0, 6).map((u) => (
-            <button
-              key={u.id}
-              type="button"
-              onClick={() => onFollowUnit(followUnitId === u.id ? null : u.id)}
-              className={`flex items-center justify-between gap-1 rounded-lg border px-2.5 py-2 text-[12px] font-bold transition-colors ${
-                followUnitId === u.id ? "border-amber text-amber" : "border-line text-tx hover:border-line2"
-              }`}
-              style={{ background: u.status === "disponible" ? "color-mix(in srgb, var(--green) 22%, transparent)" : undefined }}
-              title={`${u.code} · ${u.name}`}
-            >
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: STATUS_COLOR[u.status] }} aria-hidden="true" />
-                {CLAVE_BY_STATUS[u.status]}
-              </span>
-              <span className="text-mu2">{u.code}</span>
-            </button>
-          ))}
-        </div>
-        <p className="mt-1.5 text-[10px] leading-snug text-mu2">
-          6-0 disponible · 6-8 en ruta · 6-10 en el lugar · 6-9 regresando
-        </p>
-        <button
-          type="button"
-          className="mt-1 w-full rounded-lg border px-2.5 py-1.5 text-[11.5px] font-bold text-green hover:border-green/40"
-          style={{ background: showAll ? "color-mix(in srgb, var(--green) 22%, transparent)" : undefined }}
-          onClick={() => setShowAll((v) => !v)}
-        >
-          {showAll ? "Ver menos" : "Ver más"}
-        </button>
+      <p className="mb-2 text-[10.5px] text-mu2">Toca un vehículo para seguir su cámara en el mapa.</p>
+      <div className="flex flex-col gap-1.5">
+        {units.map((u) => (
+          <button
+            key={u.id}
+            type="button"
+            onClick={() => onFollowUnit(followUnitId === u.id ? null : u.id)}
+            className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors ${
+              followUnitId === u.id ? "border-amber" : "border-line hover:border-line2"
+            }`}
+            style={followUnitId === u.id ? { background: "color-mix(in srgb, var(--amber) 10%, transparent)" } : undefined}
+            title={u.name}
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ background: STATUS_COLOR[u.status] }}
+                aria-hidden="true"
+              />
+              <span className="display text-[15px] font-bold tracking-wide text-tx">{u.code}</span>
+            </span>
+            <span className="truncate text-[10px] font-semibold text-mu">
+              {CLAVE_BY_STATUS[u.status]} · {UNIT_STATUS_META[u.status].label}
+            </span>
+          </button>
+        ))}
       </div>
-
-      {/* VEHÍCULOS — flota completa con su estado */}
-      <div className="map-panel rounded-xl p-3" data-b35-card="vehiculos">
-        <div className="mb-2 flex items-center gap-1.5 text-[10.5px] font-bold tracking-widest text-mu uppercase">
-          <Truck size={12} aria-hidden="true" /> Vehículos
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {units.map((u) => (
-            <button
-              key={u.id}
-              type="button"
-              onClick={() => onFollowUnit(followUnitId === u.id ? null : u.id)}
-              title={`Seguir a ${u.code} · ${u.name}`}
-              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${
-                followUnitId === u.id ? "border-amber text-amber" : "border-line text-tx hover:border-line2"
-              }`}
-            >
-              <span className="h-2 w-2 rounded-full" style={{ background: STATUS_COLOR[u.status] }} aria-hidden="true" />
-              {u.code}
-              <span className="text-[9.5px] font-semibold text-mu2">({UNIT_STATUS_META[u.status].label})</span>
-            </button>
-          ))}
-        </div>
-      </div>
+      <p className="mt-2 text-[10px] leading-snug text-mu2">
+        6-0 disponible · 6-8 en ruta · 6-10 en el lugar · 6-9 regresando · F/S fuera de servicio
+      </p>
     </div>
   );
 }

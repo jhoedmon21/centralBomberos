@@ -40,7 +40,6 @@ import NewUnitDialog, { EMPTY_UNIT_DRAFT, type UnitDraft } from "./NewUnitDialog
 import SettingsDialog from "./SettingsDialog";
 import AuditDialog from "./AuditDialog";
 import MiClaveDialog from "./MiClaveDialog";
-import PreplansDialog, { EMPTY_PREPLAN_DRAFT, type PreplanDraft } from "./PreplansDialog";
 import PreplanViewDialog from "./PreplanViewDialog";
 import UsersDialog from "./UsersDialog";
 import { ViperCards, ViperClock, ViperDrawer, ViperRail, ViperStrip } from "./ViperChrome";
@@ -172,13 +171,10 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
   const [dispatchFor, setDispatchFor] = useState<IncidentDTO | null>(null);
   const [dispatchBusy, setDispatchBusy] = useState(false);
   const [simBusy, setSimBusy] = useState(false);
-  const [pickFor, setPickFor] = useState<null | "incident" | "incident-edit" | "hydrant" | "unit" | "preplan">(null);
+  const [pickFor, setPickFor] = useState<null | "incident" | "incident-edit" | "hydrant" | "unit">(null);
   const [hydrantOpen, setHydrantOpen] = useState(false);
-  // Preplans: directorio, ficha abierta, borrador (lat/lng compartidos con el pick del mapa)
-  const [preplansOpen, setPreplansOpen] = useState(false);
+  // Preplans: ficha abierta desde el mapa o el detalle (solo VISTA, sin editor)
   const [preplanView, setPreplanView] = useState<PreplanDTO | null>(null);
-  const [preplanDraft, setPreplanDraft] = useState<PreplanDraft>(EMPTY_PREPLAN_DRAFT);
-  const [preplanBusy, setPreplanBusy] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
   const [miClaveOpen, setMiClaveOpen] = useState(false);
@@ -688,10 +684,6 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
       setUnitOpen(true);
     } else if (pickFor === "hydrant") {
       setHydrantDraft((d) => ({ ...d, lat: lat.toFixed(5), lng: lng.toFixed(5) }));
-    } else if (pickFor === "preplan") {
-      setPreplanDraft((d) => ({ ...d, lat: lat.toFixed(5), lng: lng.toFixed(5) }));
-      toast.info("Ubicación del preplan fijada en el mapa");
-      return; // sigue activo para afinar con más clics
     } else if (pickFor === "incident-edit") {
       setEditDraft((d) => ({ ...d, lat: lat.toFixed(5), lng: lng.toFixed(5) }));
     } else {
@@ -716,77 +708,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
     setPickFor(null);
     if (target === "unit") setUnitOpen(true);
     else if (target === "incident") setNewOpen(true);
-    // "hydrant", "preplan" e "incident-edit": solo desactiva el clic en el mapa; la ventana sigue abierta
-  }
-
-  function startPickPreplan() {
-    // Igual que los hidrantes: el formulario queda abierto y el mapa clicable
-    setPickFor("preplan");
-  }
-
-  // ----- Preplans: alta/edición/borrado -----
-
-  async function savePreplan() {
-    setPreplanBusy(true);
-    try {
-      const lat = Number(preplanDraft.lat);
-      const lng = Number(preplanDraft.lng);
-      if (!preplanDraft.title.trim() || !preplanDraft.address.trim() || Number.isNaN(lat) || Number.isNaN(lng)) {
-        throw new Error("Completa título, dirección y ubicación (usa el botón «Mapa»)");
-      }
-      const body = {
-        title: preplanDraft.title.trim(),
-        address: preplanDraft.address.trim(),
-        lat,
-        lng,
-        layout: preplanDraft.layout.trim() || null,
-        hazards: preplanDraft.hazards.trim() || null,
-        keysInfo: preplanDraft.keysInfo.trim() || null,
-        waterSources: preplanDraft.waterSources.trim() || null,
-        contactName: preplanDraft.contactName.trim() || null,
-        contactPhone: preplanDraft.contactPhone.trim() || null,
-        notes: preplanDraft.notes.trim() || null,
-        photos: preplanDraft.photos
-          .split("\n")
-          .map((s) => s.trim())
-          .filter(Boolean),
-        status: preplanDraft.status,
-      };
-      if (preplanDraft.id == null) {
-        const d = await jfetch<{ preplan: PreplanDTO }>("/api/preplans", {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify(body),
-        });
-        toast.success(`Ficha «${d.preplan.title}» creada`);
-      } else {
-        const d = await jfetch<{ preplan: PreplanDTO }>(`/api/preplans/${preplanDraft.id}`, {
-          method: "PATCH",
-          headers: JSON_HEADERS,
-          body: JSON.stringify(body),
-        });
-        toast.success(`Ficha «${d.preplan.title}» actualizada`);
-      }
-      setPreplansOpen(false);
-      setPickFor((p) => (p === "preplan" ? null : p));
-      setPreplanDraft(EMPTY_PREPLAN_DRAFT);
-      void refresh();
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setPreplanBusy(false);
-    }
-  }
-
-  async function deletePreplan(id: number) {
-    try {
-      await jfetch<{ ok: boolean }>(`/api/preplans/${id}`, { method: "DELETE" });
-      toast.success("Ficha eliminada");
-      void refresh();
-    } catch (e) {
-      toast.error((e as Error).message);
-      throw e;
-    }
+    // "hydrant" e "incident-edit": solo desactiva el clic en el mapa; la ventana sigue abierta
   }
 
   async function operatorLogout() {
@@ -959,7 +881,6 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
             setNewOpen(true);
           }}
           onOpenHydrants={() => setHydrantsOpen(true)}
-          onOpenPreplans={() => setPreplansOpen(true)}
           onFollowUnit={setFollowUnitId}
         />
 
@@ -980,7 +901,6 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
               setNewOpen(true);
             }}
             onOpenHydrants={() => setHydrantsOpen(true)}
-            onOpenPreplans={() => setPreplansOpen(true)}
             onOpenUsers={() => setUsersOpen(true)}
             onOpenAudit={() => setAuditOpen(true)}
             onOpenMiClave={() => setMiClaveOpen(true)}
@@ -995,19 +915,10 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         <ViperStrip incident={selectedIncident} onOpenDetail={() => setDetailOpen(true)} />
         <ViperClock />
 
-        {/* Tarjetas derechas (Sugerencia·Claves·Vehículos) mientras el panel
-            de detalle o el chat no ocupen ese costado */}
+        {/* Tarjeta de vehículos mientras el panel de detalle o el chat no
+            ocupen ese costado */}
         {!detailOpen && chatUnitId == null && (
-          <ViperCards
-            incident={selectedIncident}
-            units={units}
-            followUnitId={followUnitId}
-            canDispatch={selectedIncident != null && ACTIVE_STATUSES.includes(selectedIncident.status)}
-            onFollowUnit={setFollowUnitId}
-            onDispatch={() => {
-              if (selectedIncident) setDispatchFor(selectedIncident);
-            }}
-          />
+          <ViperCards units={units} followUnitId={followUnitId} onFollowUnit={setFollowUnitId} />
         )}
         {/* Reportes: tarjeta flotante IZQUIERDA sobre el mapa */}
         {queueOpen && (
@@ -1195,23 +1106,6 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
       )}
       {settingsOpen && (
         <SettingsDialog settings={settings} onSave={saveSettings} onClose={() => setSettingsOpen(false)} />
-      )}
-      {preplansOpen && (
-        <PreplansDialog
-          preplans={preplans}
-          role={op.role}
-          draft={preplanDraft}
-          setDraft={setPreplanDraft}
-          busy={preplanBusy}
-          onClose={() => {
-            setPreplansOpen(false);
-            setPickFor((p) => (p === "preplan" ? null : p));
-          }}
-          onSave={savePreplan}
-          onDelete={(id) => void deletePreplan(id)}
-          onStartPick={startPickPreplan}
-          onView={(p) => setPreplanView(p)}
-        />
       )}
       {preplanView && (
         <PreplanViewDialog preplan={preplanView} onClose={() => setPreplanView(null)} />

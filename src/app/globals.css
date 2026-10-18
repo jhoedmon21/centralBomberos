@@ -11,23 +11,24 @@
 
 :root,
 [data-theme="dark"] {
-  --bg: #080d13;
-  --panel: #0e151f;
-  --panel-2: #151f2b;
-  --panel-3: #1d2a39;
-  --line: #21303e;
-  --line-2: #5d82ab;
-  --tx: #eaf1f8;
-  --mu: #9aadc0;
-  --mu-2: #7f94aa;
-  --red: #ff5644;
-  --red-btn: #d13e30;
-  --red-btn-hover: #c8342a;
+  /* Paleta VIPER GO: azul baul profundo · línea cian tenue · rojo señal */
+  --bg: #071522;
+  --panel: #0a1a28;
+  --panel-2: #102538;
+  --panel-3: #153049;
+  --line: #1c3a4c;
+  --line-2: #6f93ad;
+  --tx: #e8f2f5;
+  --mu: #8fa9b5;
+  --mu-2: #71919f;
+  --red: #ff553e;
+  --red-btn: #e04432;
+  --red-btn-hover: #c93a2b;
   --amber: #eea72c;
-  --green: #45c573;
+  --green: #4ecb86;
   --blue: #55a6f2;
-  --map-bg: #0d1419;
-  --map-bg2: #111a22;
+  --map-bg: #081827;
+  --map-bg2: #0d2236;
 
   --st-reportado: #ff4a38;
   --st-despachado: #f5a623;

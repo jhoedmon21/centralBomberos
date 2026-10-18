@@ -38,13 +38,12 @@ import IncidentQueue from "./IncidentQueue";
 import NewIncidentDialog, { EMPTY_DRAFT, type IncidentDraft } from "./NewIncidentDialog";
 import NewUnitDialog, { EMPTY_UNIT_DRAFT, type UnitDraft } from "./NewUnitDialog";
 import SettingsDialog from "./SettingsDialog";
-import StatsStrip from "./StatsStrip";
-import TopBar from "./TopBar";
 import AuditDialog from "./AuditDialog";
 import MiClaveDialog from "./MiClaveDialog";
 import PreplansDialog, { EMPTY_PREPLAN_DRAFT, type PreplanDraft } from "./PreplansDialog";
 import PreplanViewDialog from "./PreplanViewDialog";
 import UsersDialog from "./UsersDialog";
+import { ViperCards, ViperClock, ViperDrawer, ViperRail, ViperStrip } from "./ViperChrome";
 import type { LayersState } from "./MapView";
 
 const MapView = dynamic(() => import("./MapView"), {
@@ -104,8 +103,11 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
   const [tab, setTab] = useState<DetailTab>("detalle");
   // Paneles flotantes sobre el mapa (mismo diseño de cabina que la tablet):
   // el mapa SIEMPRE queda a fondo; Reportes y Detalle son tarjetas flotantes.
+  // CAJÓN VIPER: menú de módulos sobre el mapa (abierto por defecto en
+  // escritorio, como el diseño de referencia).
   const [queueOpen, setQueueOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [lastNewId, setLastNewId] = useState<number | null>(null);
   // Unidad seguida por la cámara del mapa (null = cámara libre). La tablet ya
   // hacía esto en modo navegación; aquí la central puede seguir el desplazamiento.
@@ -132,13 +134,32 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
     radius: true,
   });
 
-  // En escritorio la cabina abre con AMBOS paneles flotantes sobre el mapa
-  // (misma estética que la tablet); se decide tras montar para no romper SSR.
+  // En escritorio la cabina abre con el CAJÓN VIPER visible (estado de la
+  // imagen de referencia); los paneles Reportes/Detalle quedan a un clic.
   useEffect(() => {
     const wide = window.innerWidth >= 1024;
-    setQueueOpen(wide);
-    setDetailOpen(wide);
+    setDrawerOpen(wide);
+    setQueueOpen(false);
+    setDetailOpen(false);
   }, []);
+
+  // El cajón y la lista de reportes comparten la esquinal izquierda:
+  // abrir uno esconde el otro para que el mapa nunca quede tapado dos veces.
+  function toggleDrawer() {
+    const opening = !drawerOpen;
+    setDrawerOpen(opening);
+    if (opening) setQueueOpen(false);
+  }
+  function openQueue() {
+    setQueueOpen(true);
+    setDrawerOpen(false);
+  }
+  function toggleSound() {
+    const next = !soundOn;
+    setSoundOn(next);
+    if (next) primeAudio();
+    void saveSettings({ alert_sound: next ? "1" : "0" });
+  }
 
   // ----- Diálogos -----
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -921,35 +942,73 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
       </div>
 
       <div className="relative z-[5] flex h-full flex-col">
-      <TopBar
-        live={live}
-        soundOn={soundOn}
-        simBusy={simBusy}
-        theme={theme}
-        op={op}
-        onToggleTheme={toggleTheme}
-        onToggleSound={() => {
-          const next = !soundOn;
-          setSoundOn(next);
-          if (next) primeAudio();
-          void saveSettings({ alert_sound: next ? "1" : "0" });
-        }}
-        onSimulate={simulate}
-        onNewReport={() => {
-          setDraft(EMPTY_DRAFT);
-          setNewOpen(true);
-        }}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onOpenHydrants={() => setHydrantsOpen(true)}
-        onOpenPreplans={() => setPreplansOpen(true)}
-        onOpenUsers={() => setUsersOpen(true)}
-        onOpenAudit={() => setAuditOpen(true)}
-        onOpenMiClave={() => setMiClaveOpen(true)}
-        onLogout={() => void operatorLogout()}
-      />
-      <StatsStrip stats={stats} live={live} />
+        <ViperRail
+          op={op}
+          live={live}
+          soundOn={soundOn}
+          simBusy={simBusy}
+          theme={theme}
+          units={units}
+          followUnitId={followUnitId}
+          onToggleDrawer={toggleDrawer}
+          onToggleTheme={toggleTheme}
+          onToggleSound={toggleSound}
+          onSimulate={simulate}
+          onNewReport={() => {
+            setDraft(EMPTY_DRAFT);
+            setNewOpen(true);
+          }}
+          onOpenHydrants={() => setHydrantsOpen(true)}
+          onOpenPreplans={() => setPreplansOpen(true)}
+          onFollowUnit={setFollowUnitId}
+        />
+
+        {drawerOpen && (
+          <ViperDrawer
+            op={op}
+            theme={theme}
+            soundOn={soundOn}
+            live={live}
+            stats={stats}
+            simBusy={simBusy}
+            onClose={() => setDrawerOpen(false)}
+            onToggleTheme={toggleTheme}
+            onToggleSound={toggleSound}
+            onSimulate={simulate}
+            onNewReport={() => {
+              setDraft(EMPTY_DRAFT);
+              setNewOpen(true);
+            }}
+            onOpenHydrants={() => setHydrantsOpen(true)}
+            onOpenPreplans={() => setPreplansOpen(true)}
+            onOpenUsers={() => setUsersOpen(true)}
+            onOpenAudit={() => setAuditOpen(true)}
+            onOpenMiClave={() => setMiClaveOpen(true)}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenQueue={openQueue}
+            onLogout={() => void operatorLogout()}
+          />
+        )}
 
       <main className="relative min-h-0 flex-1">
+        {/* Franja del incidente en pantalla + reloj de servicio (pie de cabina) */}
+        <ViperStrip incident={selectedIncident} onOpenDetail={() => setDetailOpen(true)} />
+        <ViperClock />
+
+        {/* Tarjetas derechas (Sugerencia·Claves·Vehículos) mientras el panel
+            de detalle o el chat no ocupen ese costado */}
+        {!detailOpen && chatUnitId == null && (
+          <ViperCards
+            incident={selectedIncident}
+            units={units}
+            followUnitId={followUnitId}
+            canDispatch={selectedIncident != null && ACTIVE_STATUSES.includes(selectedIncident.status)}
+            onFollowUnit={setFollowUnitId}
+            onDispatch={() => {
+              if (selectedIncident) setDispatchFor(selectedIncident);
+            }}
+          />
+        )}
         {/* Reportes: tarjeta flotante IZQUIERDA sobre el mapa */}
         {queueOpen && (
           <aside

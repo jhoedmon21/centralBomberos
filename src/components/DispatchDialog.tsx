@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { useDraggablePanel } from "@/hooks/useDraggablePanel";
 import { GearSix, Siren, WhatsappLogo, X } from "@phosphor-icons/react";
 import type { HydrantNear } from "@/lib/geo";
 import { haversineM } from "@/lib/geo";
@@ -35,6 +36,8 @@ export default function DispatchDialog({
   const code = displayCode(incident.id, incident.createdAt);
   const dialogRef = useRef<HTMLDivElement>(null);
   useDialogFocus(dialogRef);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const { dragging, panelStyle, handleProps } = useDraggablePanel(panelRef);
 
   const sorted = useMemo(() => {
     return [...units]
@@ -80,8 +83,18 @@ export default function DispatchDialog({
       aria-modal="true"
       aria-label="Despachar unidad"
     >
-      <div className="anim-slidein flex max-h-[92vh] w-full max-w-lg flex-col rounded border border-line bg-panel shadow-2xl">
-        <header className="flex items-center justify-between border-b border-line px-4 py-3">
+      <div
+        ref={panelRef}
+        style={panelStyle}
+        className={cx(
+          "anim-slidein flex max-h-[92vh] w-full max-w-lg flex-col rounded border border-line bg-panel shadow-2xl",
+          dragging && "select-none",
+        )}
+      >
+        <header
+          className="flex cursor-grab touch-none select-none items-center justify-between border-b border-line px-4 py-3 active:cursor-grabbing [&_button]:cursor-pointer"
+          {...handleProps}
+        >
           <div>
             <h2 className="display flex items-center gap-2 text-base font-bold tracking-wide uppercase">
               <Siren size={17} className="text-red" aria-hidden="true" /> Despachar unidades

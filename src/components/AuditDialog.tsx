@@ -5,9 +5,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { useDraggablePanel } from "@/hooks/useDraggablePanel";
 import { ArrowClockwise, Scroll, X } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import type { AuditDTO } from "@/lib/types";
+import { cx } from "@/lib/utils";
 
 const ACTION_LABEL: Record<string, string> = {
   login: "ingreso",
@@ -29,6 +31,7 @@ const ACTION_LABEL: Record<string, string> = {
 export default function AuditDialog({ onClose }: { onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useDialogFocus(ref);
+  const { dragging, panelStyle, handleProps } = useDraggablePanel(ref);
 
   const [entries, setEntries] = useState<AuditDTO[] | null>(null);
 
@@ -51,9 +54,19 @@ export default function AuditDialog({ onClose }: { onClose: () => void }) {
   }, [load]);
 
   return (
-    <div className="fixed inset-0 z-[980] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-      <div ref={ref} className="flex max-h-[88vh] w-full max-w-2xl flex-col rounded border border-line bg-bg2 p-4 shadow-2xl">
-        <div className="flex items-center gap-2">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+      <div
+        ref={ref}
+        style={panelStyle}
+        className={cx(
+          "flex max-h-[88vh] w-full max-w-2xl flex-col rounded border border-line bg-bg2 p-4 shadow-2xl",
+          dragging && "select-none",
+        )}
+      >
+        <div
+          className="flex cursor-grab touch-none select-none items-center gap-2 active:cursor-grabbing [&_button]:cursor-pointer"
+          {...handleProps}
+        >
           <Scroll size={18} className="text-amber" aria-hidden="true" />
           <h2 className="display text-base font-bold uppercase tracking-wider">Bitácora del sistema</h2>
           <span className="text-[10.5px] text-mu2">últimas 200 · refresco 30 s</span>

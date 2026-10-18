@@ -6,12 +6,15 @@
 
 import { useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { useDraggablePanel } from "@/hooks/useDraggablePanel";
 import { Key, X } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { cx } from "@/lib/utils";
 
 export default function MiClaveDialog({ onClose }: { onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useDialogFocus(ref);
+  const { dragging, panelStyle, handleProps } = useDraggablePanel(ref);
 
   const [current, setCurrent] = useState("");
   const [password, setPassword] = useState("");
@@ -44,9 +47,19 @@ export default function MiClaveDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[980] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-      <div ref={ref} className="w-full max-w-sm rounded border border-line bg-bg2 p-4 shadow-2xl">
-        <div className="flex items-center gap-2">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+      <div
+        ref={ref}
+        style={panelStyle}
+        className={cx(
+          "w-full max-w-sm rounded border border-line bg-bg2 p-4 shadow-2xl",
+          dragging && "select-none",
+        )}
+      >
+        <div
+          className="flex cursor-grab touch-none select-none items-center gap-2 active:cursor-grabbing [&_button]:cursor-pointer"
+          {...handleProps}
+        >
           <Key size={17} className="text-amber" aria-hidden="true" />
           <h2 className="display text-base font-bold uppercase tracking-wider">Mi clave de acceso</h2>
           <button className="btn btn-sm ml-auto" onClick={onClose} title="Cerrar">

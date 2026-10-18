@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { useDraggablePanel } from "@/hooks/useDraggablePanel";
 import { Drop, MagnifyingGlass, Plus, X } from "@phosphor-icons/react";
 import { HYDRANT_SITUATION_META } from "@/lib/meta";
 import type { HydrantDTO, HydrantSituation } from "@/lib/types";
@@ -24,6 +25,8 @@ export default function HydrantsDialog({ hydrants, onClose, onNewHydrant, onSitu
   const dialogRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   useDialogFocus(dialogRef);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const { dragging, panelStyle, handleProps } = useDraggablePanel(panelRef);
 
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"todos" | HydrantSituation>("todos");
@@ -77,8 +80,18 @@ export default function HydrantsDialog({ hydrants, onClose, onNewHydrant, onSitu
       aria-modal="true"
       aria-label="Directorio de hidrantes"
     >
-      <div className="anim-slidein flex max-h-[92vh] w-full max-w-3xl flex-col rounded border border-line bg-panel shadow-2xl">
-        <header className="flex items-center justify-between border-b border-line px-4 py-3">
+      <div
+        ref={panelRef}
+        style={panelStyle}
+        className={cx(
+          "anim-slidein flex max-h-[92vh] w-full max-w-3xl flex-col rounded border border-line bg-panel shadow-2xl",
+          dragging && "select-none",
+        )}
+      >
+        <header
+          className="flex cursor-grab touch-none select-none items-center justify-between border-b border-line px-4 py-3 active:cursor-grabbing [&_button]:cursor-pointer"
+          {...handleProps}
+        >
           <h2 className="display flex items-center gap-2 text-base font-bold tracking-wide uppercase">
             <Drop size={17} weight="fill" className="text-blue" aria-hidden="true" /> Hidrantes de la zona
             <span className="ml-1 font-mono text-xs text-mu">{hydrants.length}</span>

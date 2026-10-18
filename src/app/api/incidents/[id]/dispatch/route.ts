@@ -8,6 +8,8 @@ import { broadcast } from "@/lib/bus";
 import { logAudit } from "@/lib/audit";
 import { operatorActor, requireOperator } from "@/lib/opauth";
 import { prisma } from "@/lib/db";
+import { nearestPreplan } from "@/lib/geo";
+import { listPreplans } from "@/lib/preplans";
 import { sendPushToUnit } from "@/lib/push";
 import { dispatchIncident } from "@/lib/queries";
 
@@ -37,13 +39,25 @@ export async function POST(request: Request, ctx: RouteContext<"/api/incidents/[
     const incident = await dispatchIncident(incidentId, unitIds);
     logAudit(operatorActor(op), "dispatch", { incidentId, units: unitIds });
 
+    // ¿La escena cae sobre un edificio con ficha precargada? Se lo decimos a
+    // la unidad en el propio aviso (la ficha llega dentro de la misión).
+    let bodyNote = `${incident.title} — ${incident.address}`;
+    try {
+      const preplans = await listPreplans();
+      if (nearestPreplan(incident.lat, incident.lng, preplans, 300)) {
+        bodyNote += "  📋 Con ficha de edificio (ver misión)";
+      }
+    } catch {
+      /* el aviso sale igual sin la nota */
+    }
+
     for (const unitId of freshIds) {
       // Notificar a la tablet (Web Push de prioridad alta; la app en primer
       // plano también lo recibe por SSE y lanza la alerta con sonido/vibración)
       void sendPushToUnit(unitId, {
         kind: "dispatch",
         title: "🚨 Nuevo despacho",
-        body: `${incident.title} — ${incident.address}`,
+        body: bodyNote,
         incidentId: incident.id,
         at: Date.now(),
       });

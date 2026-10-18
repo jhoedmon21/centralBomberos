@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { useDraggablePanel } from "@/hooks/useDraggablePanel";
 import {
   CheckCircle,
   Crosshair,
@@ -91,42 +92,7 @@ export default function NewIncidentDialog({ draft, setDraft, busy, mode = "creat
 
   // Ventana arrastrable (solo al editar) para dejar ver el mapa y ajustar la ubicación con clics
   const panelRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState(false);
-  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
-  const dragState = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null);
-
-  function startDrag(e: ReactPointerEvent<HTMLElement>) {
-    if ((e.target as HTMLElement).closest("button, a, input, select, textarea")) return;
-    const panel = panelRef.current;
-    if (!panel) return;
-    const r = panel.getBoundingClientRect();
-    dragState.current = { px: e.clientX, py: e.clientY, ox: r.left, oy: r.top };
-    setDragPos({ x: r.left, y: r.top });
-    setDragging(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
-  }
-
-  function moveDrag(e: ReactPointerEvent<HTMLElement>) {
-    const d = dragState.current;
-    const panel = panelRef.current;
-    if (!d || !panel) return;
-    const margin = 8;
-    const maxX = Math.max(margin, window.innerWidth - panel.offsetWidth - margin);
-    const maxY = Math.max(margin, window.innerHeight - panel.offsetHeight - margin);
-    setDragPos({
-      x: Math.min(Math.max(e.clientX - d.px + d.ox, margin), maxX),
-      y: Math.min(Math.max(e.clientY - d.py + d.oy, margin), maxY),
-    });
-  }
-
-  function endDrag(e: ReactPointerEvent<HTMLElement>) {
-    if (!dragState.current) return;
-    dragState.current = null;
-    setDragging(false);
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-  }
+  const { dragging, panelStyle, handleProps, reset: dragReset } = useDraggablePanel(panelRef);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -233,7 +199,7 @@ export default function NewIncidentDialog({ draft, setDraft, busy, mode = "creat
     >
       <div
         ref={panelRef}
-        style={dragPos ? { position: "fixed", left: dragPos.x, top: dragPos.y, margin: 0 } : undefined}
+        style={panelStyle}
         className={cx(
           "anim-slidein pointer-events-auto flex max-h-[92vh] w-full max-w-lg flex-col rounded border border-line bg-panel shadow-2xl",
           dragging && "select-none",
@@ -241,10 +207,7 @@ export default function NewIncidentDialog({ draft, setDraft, busy, mode = "creat
       >
         <header
           className="flex items-center justify-between border-b border-line px-4 py-3 cursor-grab touch-none select-none active:cursor-grabbing [&_button]:cursor-pointer"
-          onPointerDown={startDrag}
-          onPointerMove={moveDrag}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
+          {...handleProps}
         >
           <h2 className="display flex items-center gap-2 text-base font-bold tracking-wide uppercase">
             {editing ? (
@@ -274,11 +237,11 @@ export default function NewIncidentDialog({ draft, setDraft, busy, mode = "creat
               </>
             )}
           </span>
-          {dragPos && (
+          {(dragging || panelStyle) && (
             <button
               type="button"
               className="btn btn-sm btn-ghost ml-auto shrink-0"
-              onClick={() => setDragPos(null)}
+              onClick={dragReset}
             >
                 Centrar
               </button>

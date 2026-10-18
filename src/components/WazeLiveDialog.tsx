@@ -3,7 +3,9 @@
 import { useEffect, useRef } from "react";
 import { ArrowSquareOut, TrafficSignal, X } from "@phosphor-icons/react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { useDraggablePanel } from "@/hooks/useDraggablePanel";
 import { CITY_CENTER } from "@/lib/geo";
+import { cx } from "@/lib/utils";
 
 interface Props {
   onClose: () => void;
@@ -17,6 +19,8 @@ const LIVE_URL = `https://www.waze.com/es-419/live-map/directions?to=ll.${CITY_C
 export default function WazeLiveDialog({ onClose }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   useDialogFocus(dialogRef);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const { dragging, panelStyle, handleProps } = useDraggablePanel(panelRef);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -35,8 +39,18 @@ export default function WazeLiveDialog({ onClose }: Props) {
       aria-modal="true"
       aria-label="Tráfico en vivo de Waze"
     >
-      <div className="anim-slidein flex max-h-[92vh] w-full max-w-3xl flex-col rounded border border-line bg-panel shadow-2xl">
-        <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+      <div
+        ref={panelRef}
+        style={panelStyle}
+        className={cx(
+          "anim-slidein flex max-h-[92vh] w-full max-w-3xl flex-col rounded border border-line bg-panel shadow-2xl",
+          dragging && "select-none",
+        )}
+      >
+        <header
+          className="flex cursor-grab touch-none select-none items-center justify-between gap-3 border-b border-line px-4 py-3 active:cursor-grabbing [&_button]:cursor-pointer"
+          {...handleProps}
+        >
           <div>
             <h2 className="display flex items-center gap-2 text-base font-bold tracking-wide uppercase">
               <TrafficSignal size={17} className="text-red" aria-hidden="true" /> Tráfico en vivo · Waze

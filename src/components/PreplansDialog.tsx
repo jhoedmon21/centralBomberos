@@ -7,6 +7,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { useDraggablePanel } from "@/hooks/useDraggablePanel";
 import { Buildings, Crosshair, MagnifyingGlass, Pencil, Plus, Trash, X } from "@phosphor-icons/react";
 import type { OperatorRole, PreplanDTO } from "@/lib/types";
 import { cx } from "@/lib/utils";
@@ -91,6 +92,7 @@ export default function PreplansDialog({
 }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   useDialogFocus(dialogRef);
+  const { dragging, panelStyle, handleProps } = useDraggablePanel(dialogRef);
 
   const [mode, setMode] = useState<"list" | "form">(draft.id == null && draft.title ? "form" : "list");
   const [query, setQuery] = useState("");
@@ -120,9 +122,19 @@ export default function PreplansDialog({
   if (mode === "form") {
     const editing = draft.id != null;
     return (
-      <div className="fixed inset-0 z-[980] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-        <div ref={dialogRef} className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded border border-line bg-bg2 p-4 shadow-2xl">
-          <div className="mb-3 flex items-center gap-2">
+      <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+        <div
+          ref={dialogRef}
+          style={panelStyle}
+          className={cx(
+            "max-h-[88vh] w-full max-w-lg overflow-y-auto rounded border border-line bg-bg2 p-4 shadow-2xl",
+            dragging && "select-none",
+          )}
+        >
+          <div
+            className="mb-3 flex cursor-grab touch-none select-none items-center gap-2 active:cursor-grabbing [&_button]:cursor-pointer"
+            {...handleProps}
+          >
             <Buildings size={17} className="text-amber" aria-hidden="true" />
             <h2 className="display text-base font-bold uppercase tracking-wider">
               {editing ? "Editar ficha" : "Ficha operativa nueva"}
@@ -270,9 +282,19 @@ export default function PreplansDialog({
 
   // ---------- Lista ----------
   return (
-    <div className="fixed inset-0 z-[980] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-      <div ref={dialogRef} className="flex max-h-[88vh] w-full max-w-xl flex-col rounded border border-line bg-bg2 p-4 shadow-2xl">
-        <div className="flex items-center gap-2">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+      <div
+        ref={dialogRef}
+        style={panelStyle}
+        className={cx(
+          "flex max-h-[88vh] w-full max-w-xl flex-col rounded border border-line bg-bg2 p-4 shadow-2xl",
+          dragging && "select-none",
+        )}
+      >
+        <div
+          className="flex cursor-grab touch-none select-none items-center gap-2 active:cursor-grabbing [&_button]:cursor-pointer"
+          {...handleProps}
+        >
           <Buildings size={18} className="text-amber" aria-hidden="true" />
           <h2 className="display text-base font-bold uppercase tracking-wider">Preplans</h2>
           <span className="text-[11px] text-mu2">{activeCount} activas de {preplans.length}</span>

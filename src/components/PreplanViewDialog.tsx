@@ -4,9 +4,11 @@
 // cuando una emergencia cae a <300 m del edificio — y desde el directorio.
 
 import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { useDraggablePanel } from "@/hooks/useDraggablePanel";
 import { Buildings, Phone, X } from "@phosphor-icons/react";
 import { useRef } from "react";
 import type { PreplanDTO } from "@/lib/types";
+import { cx } from "@/lib/utils";
 
 interface Props {
   preplan: PreplanDTO;
@@ -26,11 +28,22 @@ function Row({ label, value }: { label: string; value: string | null }) {
 export default function PreplanViewDialog({ preplan, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   useDialogFocus(ref);
+  const { dragging, panelStyle, handleProps } = useDraggablePanel(ref);
 
   return (
-    <div className="fixed inset-0 z-[980] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-      <div ref={ref} className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded border border-amber/50 bg-bg2 p-4 shadow-2xl">
-        <div className="flex items-start gap-2">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+      <div
+        ref={ref}
+        style={panelStyle}
+        className={cx(
+          "max-h-[88vh] w-full max-w-lg overflow-y-auto rounded border border-amber/50 bg-bg2 p-4 shadow-2xl",
+          dragging && "select-none",
+        )}
+      >
+        <div
+          className="flex cursor-grab touch-none select-none items-start gap-2 active:cursor-grabbing [&_button]:cursor-pointer"
+          {...handleProps}
+        >
           <Buildings size={18} className="mt-0.5 text-amber" aria-hidden="true" />
           <div className="min-w-0">
             <h2 className="display text-lg leading-tight font-bold">{preplan.title}</h2>

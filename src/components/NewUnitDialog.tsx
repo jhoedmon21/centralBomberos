@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { useDraggablePanel } from "@/hooks/useDraggablePanel";
 import { Crosshair, MapPin, Truck, X } from "@phosphor-icons/react";
 import { CITY_CENTER } from "@/lib/geo";
 import { UNIT_STATUS_META, UNIT_TYPE_META } from "@/lib/meta";
 import type { UnitStatus, UnitType } from "@/lib/types";
+import { cx } from "@/lib/utils";
 
 export interface UnitDraft {
   code: string;
@@ -46,6 +48,8 @@ export default function NewUnitDialog({ draft, setDraft, busy, onClose, onSave, 
   const errorRef = useRef<HTMLParagraphElement>(null);
   const wasTouched = useRef(false);
   useDialogFocus(dialogRef);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const { dragging, panelStyle, handleProps } = useDraggablePanel(panelRef);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -100,8 +104,18 @@ export default function NewUnitDialog({ draft, setDraft, busy, onClose, onSave, 
       aria-modal="true"
       aria-label="Agregar unidad"
     >
-      <div className="anim-slidein flex max-h-[92vh] w-full max-w-lg flex-col rounded border border-line bg-panel shadow-2xl">
-        <header className="flex items-center justify-between border-b border-line px-4 py-3">
+      <div
+        ref={panelRef}
+        style={panelStyle}
+        className={cx(
+          "anim-slidein flex max-h-[92vh] w-full max-w-lg flex-col rounded border border-line bg-panel shadow-2xl",
+          dragging && "select-none",
+        )}
+      >
+        <header
+          className="flex cursor-grab touch-none select-none items-center justify-between border-b border-line px-4 py-3 active:cursor-grabbing [&_button]:cursor-pointer"
+          {...handleProps}
+        >
           <h2 className="display flex items-center gap-2 text-base font-bold tracking-wide uppercase">
             <Truck size={17} weight="fill" className="text-blue" aria-hidden="true" /> Agregar unidad
           </h2>

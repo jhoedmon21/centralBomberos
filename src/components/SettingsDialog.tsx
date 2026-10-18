@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { useDraggablePanel } from "@/hooks/useDraggablePanel";
 import { Check, Copy, GearSix, Info, X } from "@phosphor-icons/react";
 import type { SettingsDTO } from "@/lib/types";
-import { digitsOnly } from "@/lib/utils";
+import { cx, digitsOnly } from "@/lib/utils";
 
 interface Props {
   settings: SettingsDTO;
@@ -50,6 +51,8 @@ export default function SettingsDialog({ settings, onSave, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   useDialogFocus(dialogRef);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const { dragging, panelStyle, handleProps } = useDraggablePanel(panelRef);
   // El diálogo solo se monta cuando está abierto (tras un clic), por lo que
   // es seguro leer `window` en el inicializador.
   const [webhookUrl] = useState(() =>
@@ -94,8 +97,18 @@ export default function SettingsDialog({ settings, onSave, onClose }: Props) {
       aria-modal="true"
       aria-label="Configuración de la central"
     >
-      <div className="anim-slidein flex max-h-[92vh] w-full max-w-xl flex-col rounded border border-line bg-panel shadow-2xl">
-        <header className="flex items-center justify-between border-b border-line px-4 py-3">
+      <div
+        ref={panelRef}
+        style={panelStyle}
+        className={cx(
+          "anim-slidein flex max-h-[92vh] w-full max-w-xl flex-col rounded border border-line bg-panel shadow-2xl",
+          dragging && "select-none",
+        )}
+      >
+        <header
+          className="flex cursor-grab touch-none select-none items-center justify-between border-b border-line px-4 py-3 active:cursor-grabbing [&_button]:cursor-pointer"
+          {...handleProps}
+        >
           <h2 className="display flex items-center gap-2 text-base font-bold tracking-wide uppercase">
             <GearSix size={17} className="text-red" aria-hidden="true" /> Configuración de la central
           </h2>

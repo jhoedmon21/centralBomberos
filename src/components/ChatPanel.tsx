@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatCircle, PaperPlaneTilt, Truck, X } from "@phosphor-icons/react";
 import type { ChatDTO } from "@/lib/types";
+import { useDraggablePanel } from "@/hooks/useDraggablePanel";
 import { cx, timeAgo } from "@/lib/utils";
 
 interface Props {
@@ -22,6 +23,8 @@ export default function ChatPanel({ unitId, unitCode, incoming, onClose }: Props
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const { dragging, panelStyle, handleProps } = useDraggablePanel(panelRef);
 
   // Historial al abrir (el panel se remonta por key en el padre)
   useEffect(() => {
@@ -87,11 +90,19 @@ export default function ChatPanel({ unitId, unitCode, incoming, onClose }: Props
 
   return (
     <div
-      className="absolute right-3 bottom-3 top-3 z-[960] flex w-[320px] max-w-[85vw] flex-col overflow-hidden rounded border border-line bg-panel shadow-lg"
+      ref={panelRef}
+      style={panelStyle}
+      className={cx(
+        "absolute right-3 bottom-3 top-3 z-[960] flex w-[320px] max-w-[85vw] flex-col overflow-hidden rounded border border-line bg-panel shadow-lg",
+        dragging && "select-none",
+      )}
       role="dialog"
       aria-label={`Chat con la unidad ${unitCode}`}
     >
-      <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2.5">
+      <header
+        className="flex shrink-0 cursor-grab touch-none select-none items-center gap-2 border-b border-line px-3 py-2.5 active:cursor-grabbing [&_button]:cursor-pointer"
+        {...handleProps}
+      >
         <ChatCircle size={16} className="text-blue" aria-hidden="true" />
         <span className="display flex items-center gap-1.5 text-[14px] font-bold">
           <Truck size={14} className="text-blue" aria-hidden="true" /> {unitCode}

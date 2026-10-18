@@ -7,10 +7,11 @@ import type { Incident, Unit } from "@prisma/client";
 import { getAuth, type Auth } from "./auth";
 import { prisma } from "./db";
 import { ApiError } from "./errors";
-import { haversineM } from "./geo";
+import { haversineM, nearestPreplan } from "./geo";
 import { ACTIVE_STATUSES } from "./meta";
 import { listHydrants, listRisks, toIncidentDTO, toUnitDTO } from "./queries";
-import type { HydrantDTO, IncidentDTO, RiskDTO, UnitDTO, UnitItemDTO } from "./types";
+import { listPreplans } from "./preplans";
+import type { HydrantDTO, IncidentDTO, PreplanDTO, RiskDTO, UnitDTO, UnitItemDTO } from "./types";
 
 /** Exige sesión de unidad válida; lanza 401 si no la hay */
 export async function requireUnit(request: Request): Promise<Auth> {
@@ -58,10 +59,20 @@ export interface MissionRisk extends RiskDTO {
   meters: number;
 }
 
+/** Ficha de riesgo (preplan) ligada a la misión: la tablet la muestra en
+ * escena para entrar con información del edificio (First Due). */
+export interface MissionPreplan {
+  preplan: PreplanDTO;
+  /** Distancia del incidente al edificio precargado */
+  meters: number;
+}
+
 export interface MissionPayload {
   incident: IncidentDTO;
   hydrants: MissionHydrant[];
   risks: MissionRisk[];
+  /** Preplan activo si la escena cae a ≤300 m de un edificio precargado */
+  preplan: MissionPreplan | null;
   /** Otras unidades despachadas a ESTE incidente (asignaciones reales) */
   otherUnits: Array<Pick<Unit, "code" | "name" | "status">>;
   /** Teléfono del reportante enmascarado (la unidad no ve el número completo) */
@@ -77,7 +88,7 @@ export async function missionPayload(
   incident: Incident & { unit?: Unit | null },
   unitId?: number,
 ): Promise<MissionPayload> {
-  const [hydrants, risks, assignments] = await Promise.all([
+  const [hydrants, risks, assignments, preplans] = await Promise.all([
     listHydrants(),
     listRisks(),
     prisma.incidentUnit.findMany({
@@ -85,6 +96,7 @@ export async function missionPayload(
       include: { unit: { select: { code: true, name: true, status: true } } },
       orderBy: { dispatchedAt: "asc" },
     }),
+    listPreplans(),
   ]);
   // Respaldo (incidentes legados sin asignaciones): unidades en curso.
   const otherUnits = assignments.length
@@ -106,6 +118,13 @@ export async function missionPayload(
     .sort((a, b) => a.meters - b.meters)
     .slice(0, 5);
 
+  // Auto-ficha en escena (First Due), igual criterio que la central: preplan
+  // activo más cercano a ≤300 m. La unidad lo recibe en la misión.
+  const nearPreplan = nearestPreplan(incident.lat, incident.lng, preplans, 300);
+  const preplan: MissionPreplan | null = nearPreplan
+    ? { preplan: nearPreplan, meters: Math.round(haversineM(incident.lat, incident.lng, nearPreplan.lat, nearPreplan.lng)) }
+    : null;
+
   const dto = toIncidentDTO(incident);
   // La aceptación que ve la unidad es LA SUYA (multi-unidad: coordinadora
   // y escena pueden aceptar en momentos distintos).
@@ -121,6 +140,7 @@ export async function missionPayload(
     incident: { ...dto, reporterPhone: null, reporterName: dto.reporterName, acceptedAt: myAcceptedAt },
     hydrants: nearHydrants,
     risks: nearRisks,
+    preplan,
     otherUnits,
     reporterPhoneMasked: masked,
     departure:

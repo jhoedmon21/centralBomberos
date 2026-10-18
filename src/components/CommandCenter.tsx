@@ -102,7 +102,10 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
   const [detail, setDetail] = useState<IncidentDTO | null>(null);
   const [detailBusy, setDetailBusy] = useState(false);
   const [tab, setTab] = useState<DetailTab>("detalle");
-  const [view, setView] = useState<"queue" | "map" | "detail">("map");
+  // Paneles flotantes sobre el mapa (mismo diseño de cabina que la tablet):
+  // el mapa SIEMPRE queda a fondo; Reportes y Detalle son tarjetas flotantes.
+  const [queueOpen, setQueueOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [lastNewId, setLastNewId] = useState<number | null>(null);
   // Unidad seguida por la cámara del mapa (null = cámara libre). La tablet ya
   // hacía esto en modo navegación; aquí la central puede seguir el desplazamiento.
@@ -128,6 +131,14 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
     quakes: true,
     radius: true,
   });
+
+  // En escritorio la cabina abre con AMBOS paneles flotantes sobre el mapa
+  // (misma estética que la tablet); se decide tras montar para no romper SSR.
+  useEffect(() => {
+    const wide = window.innerWidth >= 1024;
+    setQueueOpen(wide);
+    setDetailOpen(wide);
+  }, []);
 
   // ----- Diálogos -----
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -338,7 +349,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
   function select(id: number, goDetail = false) {
     setSelectedId(id);
     setTab("detalle");
-    if (goDetail) setView("detail");
+    if (goDetail) setDetailOpen(true);
   }
 
   async function simulate() {
@@ -347,7 +358,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
       const d = await jfetch<{ incident: IncidentDTO }>("/api/simulate", { method: "POST" });
       setSelectedId(d.incident.id);
       setTab("detalle");
-      setView("detail");
+      setDetailOpen(true);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -465,7 +476,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
       setDraft(EMPTY_DRAFT);
       setSelectedId(d.incident.id);
       setTab("detalle");
-      setView("detail");
+      setDetailOpen(true);
       void refresh();
     } catch (e) {
       toast.error((e as Error).message);
@@ -879,7 +890,37 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
   );
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="relative h-dvh overflow-hidden">
+      {/* Mapa SIEMPRE a fondo: la CAD es una cabina — el mapa manda */}
+      <div className="absolute inset-0 z-0">
+        <MapView
+          incidents={mapIncidents}
+          route={route?.data ?? null}
+          units={units}
+          hydrants={hydrants}
+          risks={initial.risks}
+          preplans={preplans}
+          selectedId={selectedId}
+          nearHydrants={nearHydrants}
+          layers={layers}
+          theme={theme}
+          picking={pickFor !== null}
+          followUnitId={followUnitId}
+          onFollowUnit={setFollowUnitId}
+          track={track}
+          onTrack={toggleTrack}
+          onChat={(u) => setChatUnitId(u.id)}
+          onPreplanView={(p) => setPreplanView(p)}
+          onToggleLayer={(key) => setLayers((l) => ({ ...l, [key]: !l[key] }))}
+          onSelect={(id) => select(id)}
+          onPick={handlePick}
+          onCancelPick={cancelPick}
+          onNewHydrant={openNewHydrant}
+          onHydrantSituation={setHydrantSituation}
+        />
+      </div>
+
+      <div className="relative z-[5] flex h-full flex-col">
       <TopBar
         live={live}
         soundOn={soundOn}
@@ -908,112 +949,118 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
       />
       <StatsStrip stats={stats} live={live} />
 
-      <main id="fw-main" className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[320px_1fr_385px]">
-        <aside className={cx("min-h-0 border-r border-line", view !== "queue" && "max-lg:hidden")}>
-          <IncidentQueue
-            incidents={incidents}
-            selectedId={selectedId}
-            lastNewId={lastNewId}
-            onSelect={(id) => select(id, true)}
-          />
-        </aside>
-
-        <section className={cx("relative min-h-0", view !== "map" && "max-lg:hidden")}>
-          <MapView
-            incidents={mapIncidents}
-            route={route?.data ?? null}
-            units={units}
-            hydrants={hydrants}
-            risks={initial.risks}
-            preplans={preplans}
-            selectedId={selectedId}
-            nearHydrants={nearHydrants}
-            layers={layers}
-            theme={theme}
-            picking={pickFor !== null}
-            followUnitId={followUnitId}
-            onFollowUnit={setFollowUnitId}
-            track={track}
-            onTrack={toggleTrack}
-            onChat={(u) => setChatUnitId(u.id)}
-            onPreplanView={(p) => setPreplanView(p)}
-            onToggleLayer={(key) => setLayers((l) => ({ ...l, [key]: !l[key] }))}
-            onSelect={(id) => select(id)}
-            onPick={handlePick}
-            onCancelPick={cancelPick}
-            onNewHydrant={openNewHydrant}
-            onHydrantSituation={setHydrantSituation}
-          />
-          {/* Chat con una unidad (panel sobre el mapa; key fuerza remonto por unidad) */}
-          {chatUnitId != null && (
-            <ChatPanel
-              key={chatUnitId}
-              unitId={chatUnitId}
-              unitCode={units.find((u) => u.id === chatUnitId)?.code ?? "Unidad"}
-              incoming={lastChat}
-              onClose={() => setChatUnitId(null)}
+      <main className="relative min-h-0 flex-1">
+        {/* Reportes: tarjeta flotante IZQUIERDA sobre el mapa */}
+        {queueOpen && (
+          <aside
+            className="map-panel absolute left-2 top-2 bottom-16 z-10 flex w-[320px] max-w-[92vw] flex-col overflow-hidden rounded-xl lg:bottom-2"
+            aria-label="Reportes activos"
+          >
+            <IncidentQueue
+              incidents={incidents}
+              selectedId={selectedId}
+              lastNewId={lastNewId}
+              onSelect={(id) => select(id, true)}
             />
-          )}
-        </section>
+          </aside>
+        )}
 
-        <aside className={cx("min-h-0 border-l border-line", view !== "detail" && "max-lg:hidden")}>
-          <DetailPanel
-            incident={detailForSelected}
-            fallback={selectedIncident}
-            busy={detailBusy}
-            tab={tab}
-            theme={theme}
-            onTabChange={setTab}
-            hydrants={hydrants}
-            units={units}
-            activity={activity}
-            waCentralConfigured={Boolean(settings.wa_central)}
-            onDispatch={(i) => setDispatchFor(i)}
-            onStatus={changeStatus}
-            onReply={reply}
-            onNotifyCentral={notifyCentral}
-            onEdit={openEdit}
-            onSelectIncident={(id) => select(id)}
-            onSetUnitStatus={setUnitStatus}
-            onUnitsChanged={() => void refresh()}
-            onAddUnit={openNewUnit}
-            onRemoveUnit={removeUnit}
-            onSetCrew={setUnitCrew}
-            routeForId={route?.incidentId ?? null}
-            onRoute={toggleRoute}
-            preplanNear={preplanNear}
+        {/* Chat con una unidad (panel sobre el mapa; key fuerza remonto por unidad) */}
+        {chatUnitId != null && (
+          <ChatPanel
+            key={chatUnitId}
+            unitId={chatUnitId}
+            unitCode={units.find((u) => u.id === chatUnitId)?.code ?? "Unidad"}
+            incoming={lastChat}
+            onClose={() => setChatUnitId(null)}
           />
-        </aside>
+        )}
+
+        {/* Detalle: tarjeta flotante DERECHA sobre el mapa */}
+        {detailOpen && (
+          <aside
+            className="map-panel absolute right-2 top-2 bottom-16 z-10 flex w-[385px] max-w-[92vw] flex-col overflow-hidden rounded-xl lg:bottom-2"
+            aria-label="Detalle del reporte"
+          >
+            <DetailPanel
+              incident={detailForSelected}
+              fallback={selectedIncident}
+              busy={detailBusy}
+              tab={tab}
+              theme={theme}
+              onTabChange={setTab}
+              hydrants={hydrants}
+              units={units}
+              activity={activity}
+              waCentralConfigured={Boolean(settings.wa_central)}
+              onDispatch={(i) => setDispatchFor(i)}
+              onStatus={changeStatus}
+              onReply={reply}
+              onNotifyCentral={notifyCentral}
+              onEdit={openEdit}
+              onSelectIncident={(id) => select(id)}
+              onSetUnitStatus={setUnitStatus}
+              onUnitsChanged={() => void refresh()}
+              onAddUnit={openNewUnit}
+              onRemoveUnit={removeUnit}
+              onSetCrew={setUnitCrew}
+              routeForId={route?.incidentId ?? null}
+              onRoute={toggleRoute}
+              preplanNear={preplanNear}
+            />
+          </aside>
+        )}
       </main>
 
-      {/* Navegación móvil */}
-      <nav className="flex h-12 shrink-0 items-stretch border-t border-line bg-panel lg:hidden" aria-label="Vistas">
-        {(
-          [
-            ["queue", "Reportes", <ListBullets key="a" size={17} aria-hidden="true" />],
-            ["map", "Mapa", <MapTrifold key="b" size={17} aria-hidden="true" />],
-            ["detail", "Detalle", <Fire key="c" size={17} aria-hidden="true" />],
-          ] as ["queue" | "map" | "detail", string, React.ReactNode][]
-        ).map(([key, label, icon]) => (
-          <button
-            key={key}
-            className={cx(
-              "flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-bold tracking-wider uppercase",
-              view === key ? "text-red" : "text-mu",
-            )}
-            onClick={() => setView(key)}
-            aria-current={view === key ? "page" : undefined}
-          >
-            {icon}
-            <span className="flex items-center gap-1">
-              {label}
-              {key === "queue" && activeCount > 0 && (
-                <span className="rounded-sm bg-redbtn px-1 text-[9px] text-white">{activeCount}</span>
-              )}
-            </span>
-          </button>
-        ))}
+      {/* Píldora flotante de paneles (cabina): el mapa nunca se tapa por columnas */}
+      <nav
+        className="absolute bottom-2 left-2 z-20 flex h-11 items-center gap-1 rounded-full border border-line bg-panel/95 px-1.5 shadow-lg backdrop-blur"
+        aria-label="Paneles de la cabina"
+      >
+        <button
+          type="button"
+          className={cx(
+            "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10.5px] font-bold tracking-wider uppercase",
+            queueOpen && !detailOpen ? "bg-redbtn text-white" : "text-mu",
+          )}
+          onClick={() => {
+            setQueueOpen(true);
+            setDetailOpen(false);
+          }}
+        >
+          <ListBullets size={16} aria-hidden="true" /> Reportes
+          {activeCount > 0 && (
+            <span className="rounded-sm bg-redbtn px-1 text-[9px] text-white">{activeCount}</span>
+          )}
+        </button>
+        <button
+          type="button"
+          className={cx(
+            "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10.5px] font-bold tracking-wider uppercase",
+            !queueOpen && !detailOpen ? "bg-redbtn text-white" : "text-mu",
+          )}
+          onClick={() => {
+            setQueueOpen(false);
+            setDetailOpen(false);
+          }}
+        >
+          <MapTrifold size={16} aria-hidden="true" /> Mapa
+        </button>
+        <button
+          type="button"
+          className={cx(
+            "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10.5px] font-bold tracking-wider uppercase",
+            detailOpen && !queueOpen ? "bg-redbtn text-white" : "text-mu",
+          )}
+          onClick={() => {
+            setDetailOpen(true);
+            setQueueOpen(false);
+          }}
+        >
+          <Fire size={16} aria-hidden="true" /> Detalle
+        </button>
       </nav>
+      </div>
 
       {/* Diálogos */}
       {dispatchFor && (

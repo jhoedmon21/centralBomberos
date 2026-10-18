@@ -93,7 +93,7 @@ export default function ChatPanel({ unitId, unitCode, incoming, onClose }: Props
       ref={panelRef}
       style={panelStyle}
       className={cx(
-        "absolute right-3 bottom-3 top-3 z-[960] flex w-[320px] max-w-[85vw] flex-col overflow-hidden rounded border border-line bg-panel shadow-lg",
+        "map-panel absolute right-3 bottom-3 top-16 z-[960] flex w-[320px] max-w-[85vw] flex-col overflow-hidden rounded-xl",
         dragging && "select-none",
       )}
       role="dialog"

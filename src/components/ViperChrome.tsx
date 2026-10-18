@@ -17,6 +17,7 @@ import {
   GearSix,
   Key,
   ListBullets,
+  ChatCircle,
   Plus,
   Scroll,
   SignOut,
@@ -58,6 +59,8 @@ const STATUS_COLOR: Record<UnitStatus, string> = {
   fuera_servicio: "var(--mu-2)",
 };
 
+export { STATUS_COLOR };
+
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <span className="flex items-baseline gap-1.5 leading-none select-none">
@@ -85,6 +88,8 @@ export interface ViperRailProps {
   onSimulate: () => void;
   onNewReport: () => void;
   onOpenHydrants: () => void;
+  onOpenChat: () => void;
+  unreadChat: number;
   onFollowUnit: (id: number | null) => void;
 }
 
@@ -102,11 +107,13 @@ export function ViperRail({
   onSimulate,
   onNewReport,
   onOpenHydrants,
+  onOpenChat,
+  unreadChat,
   onFollowUnit,
 }: ViperRailProps) {
   return (
     <header
-      className="chrome-top absolute inset-x-0 top-0 z-20 flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-line px-2"
+      className="chrome-top absolute inset-x-2 top-2 z-20 flex h-12 shrink-0 items-center gap-2 overflow-x-auto rounded-xl border border-line px-2"
       aria-label="Cabina B-35"
     >
       {/* Marca + cajón */}
@@ -178,6 +185,24 @@ export function ViperRail({
       </Link>
       <button
         type="button"
+        className="btn btn-sm relative shrink-0"
+        onClick={onOpenChat}
+        title="Chat con las unidades"
+        aria-label={unreadChat > 0 ? `Chat con unidades: ${unreadChat} sin leer` : "Chat con unidades"}
+      >
+        <ChatCircle size={14} aria-hidden="true" />
+        <span className="hidden md:inline">Chat</span>
+        {unreadChat > 0 && (
+          <span
+            className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-amber px-0.5 text-[8.5px] font-bold text-black"
+            aria-hidden="true"
+          >
+            {unreadChat > 9 ? "9+" : unreadChat}
+          </span>
+        )}
+      </button>
+      <button
+        type="button"
         className="btn btn-sm shrink-0"
         onClick={onToggleSound}
         title={soundOn ? "Alertas sonoras activadas" : "Alertas silenciadas"}
@@ -216,6 +241,7 @@ export interface ViperDrawerProps {
   onSimulate: () => void;
   onNewReport: () => void;
   onOpenHydrants: () => void;
+  onOpenChat: () => void;
   onOpenUsers: () => void;
   onOpenAudit: () => void;
   onOpenMiClave: () => void;
@@ -280,6 +306,7 @@ export function ViperDrawer(props: ViperDrawerProps) {
         <MenuItem icon={<Plus size={17} />} label="Nuevo reporte" onClick={props.onNewReport} />
         <MenuItem icon={<Drop size={17} className="text-blue" />} label="Grifos / hidrantes" onClick={props.onOpenHydrants} />
         <MenuItem icon={<ListBullets size={17} />} label="Reportes (lista viva)" onClick={props.onOpenQueue} />
+        <MenuItem icon={<ChatCircle size={17} className="text-blue" />} label="Chat con unidades" onClick={props.onOpenChat} />
         <MenuItem icon={<GearSix size={17} />} label="Preferencias de la central" onClick={props.onOpenSettings} />
         <MenuItem icon={<Key size={17} />} label="Mi clave" onClick={props.onOpenMiClave} />
         {chief && <MenuItem icon={<Users size={17} />} label="Operadores" onClick={props.onOpenUsers} />}

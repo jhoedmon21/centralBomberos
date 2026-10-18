@@ -367,8 +367,12 @@
   }
 
   /* Barras de contexto (cabecera y tira de indicadores) */
+  /* Barra de cabina: FLOTANTE sobre el mapa, vidrio redondeado (como la tablet) */
   .chrome-top {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--panel-2) 72%, var(--panel)) 0%, var(--panel) 100%);
+    background: color-mix(in srgb, var(--panel) 78%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 10px 26px rgb(8 24 38 / 0.22);
   }
   .chrome-strip {
     background: linear-gradient(180deg, var(--panel) 0%, color-mix(in srgb, var(--bg) 42%, var(--panel)) 100%);

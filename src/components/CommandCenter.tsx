@@ -42,7 +42,7 @@ import AuditDialog from "./AuditDialog";
 import MiClaveDialog from "./MiClaveDialog";
 import PreplanViewDialog from "./PreplanViewDialog";
 import UsersDialog from "./UsersDialog";
-import { ViperClock, ViperDrawer, ViperRail, ViperStrip } from "./ViperChrome";
+import { STATUS_COLOR, ViperClock, ViperDrawer, ViperRail, ViperStrip } from "./ViperChrome";
 import type { LayersState } from "./MapView";
 
 const MapView = dynamic(() => import("./MapView"), {
@@ -115,6 +115,23 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
   const [track, setTrack] = useState<{ unitId: number; data: TrackDTO } | null>(null);
   // Chat abierto con una unidad (panel sobre el mapa) + último evento vivo
   const [chatUnitId, setChatUnitId] = useState<number | null>(null);
+  const chatUnitIdRef = useRef<number | null>(null);
+  chatUnitIdRef.current = chatUnitId;
+  /** Selector de unidad para conversar (píldora Chat del rail / cajón) */
+  const [chatPickOpen, setChatPickOpen] = useState(false);
+  /** Unidades con mensajes sin leer: badge Chat y aviso en el selector */
+  const [unreadChatUnits, setUnreadChatUnits] = useState<Set<number>>(new Set());
+
+  function openChatFor(unitId: number) {
+    setChatUnitId(unitId);
+    setChatPickOpen(false);
+    setUnreadChatUnits((prev) => {
+      if (!prev.has(unitId)) return prev;
+      const next = new Set(prev);
+      next.delete(unitId);
+      return next;
+    });
+  }
   const [lastChat, setLastChat] = useState<{ unitId: number; msg: ChatDTO } | null>(null);
 
   // ----- Tiempo real / tema / capas -----
@@ -318,10 +335,15 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
       // Mensaje de chat: llega completo en el evento — el panel abierto lo
       // pinta; los mensajes de la unidad avisan con toast aunque no esté abierto.
       if (ev.type === "chat" && ev.chat) {
-        setLastChat({ unitId: ev.chat.unitId, msg: { id: ev.chat.id, from: ev.chat.from, body: ev.chat.body, at: ev.chat.at } });
-        if (ev.chat.from === "unidad") {
-          const u = units.find((x) => x.id === ev.chat!.unitId);
-          const clip = ev.chat.body.length > 80 ? `${ev.chat.body.slice(0, 80)}…` : ev.chat.body;
+        const chat = ev.chat;
+        setLastChat({ unitId: chat.unitId, msg: { id: chat.id, from: chat.from, body: chat.body, at: chat.at } });
+        // Mensaje de la unidad sin su panel abierto: conversación sin leer
+        if (chatUnitIdRef.current !== chat.unitId && chat.from === "unidad") {
+          setUnreadChatUnits((prev) => new Set(prev).add(chat.unitId));
+        }
+        if (chat.from === "unidad") {
+          const u = units.find((x) => x.id === chat.unitId);
+          const clip = chat.body.length > 80 ? `${chat.body.slice(0, 80)}…` : chat.body;
           toast.info(`💬 ${u?.code ?? "Unidad"}: ${clip}`);
         }
         return;
@@ -881,6 +903,8 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
             setNewOpen(true);
           }}
           onOpenHydrants={() => setHydrantsOpen(true)}
+          onOpenChat={() => setChatPickOpen((v) => !v)}
+          unreadChat={unreadChatUnits.size}
           onFollowUnit={setFollowUnitId}
         />
 
@@ -901,6 +925,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
               setNewOpen(true);
             }}
             onOpenHydrants={() => setHydrantsOpen(true)}
+            onOpenChat={() => setChatPickOpen(true)}
             onOpenUsers={() => setUsersOpen(true)}
             onOpenAudit={() => setAuditOpen(true)}
             onOpenMiClave={() => setMiClaveOpen(true)}
@@ -910,6 +935,45 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
           />
         )}
 
+        {/* Selector de unidad para conversar (píldora Chat / cajón) */}
+        {chatPickOpen && (
+          <div
+            className="map-panel absolute right-2 top-16 z-10 flex max-h-[60vh] w-[252px] max-w-[92vw] flex-col overflow-hidden rounded-xl"
+            role="dialog"
+            aria-label="Elegir unidad para conversar"
+          >
+            <p className="border-b border-line px-3 py-2 text-[10px] font-bold tracking-widest text-mu uppercase">
+              Chat · elegir unidad
+            </p>
+            <div className="dialog-scroll flex flex-col gap-1 overflow-y-auto p-2">
+              {units.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => openChatFor(u.id)}
+                  className="flex items-center gap-2 rounded-lg border border-line px-2.5 py-2 text-left text-[12.5px] font-bold text-tx hover:border-line2"
+                  title={u.name}
+                >
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: STATUS_COLOR[u.status] }}
+                    aria-hidden="true"
+                  />
+                  {u.code}
+                  {unreadChatUnits.has(u.id) && (
+                    <span className="ml-auto rounded-full bg-amber/20 px-1.5 py-0.5 text-[9px] font-bold text-amber">
+                      sin leer
+                    </span>
+                  )}
+                </button>
+              ))}
+              {units.length === 0 && (
+                <p className="px-1 py-2 text-[11px] text-mu2">Sin unidades registradas.</p>
+              )}
+            </div>
+          </div>
+        )}
+
       <main className="relative min-h-0 flex-1">
         {/* Franja del incidente en pantalla (pie de cabina) */}
         <ViperStrip incident={selectedIncident} onOpenDetail={() => setDetailOpen(true)} />
@@ -917,7 +981,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         {/* Reportes: tarjeta flotante IZQUIERDA sobre el mapa */}
         {queueOpen && (
           <aside
-            className="map-panel absolute left-2 top-2 bottom-16 z-10 flex w-[320px] max-w-[92vw] flex-col overflow-hidden rounded-xl lg:bottom-2"
+            className="map-panel absolute left-2 top-16 bottom-16 z-10 flex w-[320px] max-w-[92vw] flex-col overflow-hidden rounded-xl lg:bottom-2"
             aria-label="Reportes activos"
           >
             <IncidentQueue
@@ -943,7 +1007,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         {/* Detalle: tarjeta flotante DERECHA sobre el mapa */}
         {detailOpen && (
           <aside
-            className="map-panel absolute right-2 top-2 bottom-16 z-10 flex w-[385px] max-w-[92vw] flex-col overflow-hidden rounded-xl lg:bottom-2"
+            className="map-panel absolute right-2 top-16 bottom-16 z-10 flex w-[385px] max-w-[92vw] flex-col overflow-hidden rounded-xl lg:bottom-2"
             aria-label="Detalle del reporte"
           >
             <DetailPanel

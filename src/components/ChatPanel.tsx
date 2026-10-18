@@ -224,7 +224,7 @@ export default function ChatPanel({ unitId, unitCode, incoming, onClose }: Props
       ref={panelRef}
       style={panelStyle}
       className={cx(
-        "map-panel absolute right-3 bottom-3 top-16 z-[960] flex w-[320px] max-w-[85vw] flex-col overflow-hidden rounded-xl",
+        "map-panel absolute right-3 bottom-3 top-24 z-[960] flex w-[320px] max-w-[85vw] flex-col overflow-hidden rounded-xl",
         dragging && "select-none",
       )}
       role="dialog"

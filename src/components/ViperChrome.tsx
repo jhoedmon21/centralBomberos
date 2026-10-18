@@ -28,6 +28,7 @@ import {
   BellSlash,
   Broadcast,
   Clock,
+  Truck,
   Users,
   WhatsappLogo,
   X,
@@ -43,7 +44,7 @@ import type {
   UnitStatus,
 } from "@/lib/types";
 
-const CLAVE_BY_STATUS: Record<UnitStatus, string> = {
+export const CLAVE_BY_STATUS: Record<UnitStatus, string> = {
   disponible: "6-0",
   en_ruta: "6-8",
   en_escena: "6-10",
@@ -67,7 +68,9 @@ function Brand({ compact = false }: { compact?: boolean }) {
       <span className={`display font-bold tracking-wide ${compact ? "text-[15px]" : "text-[19px]"}`}>
         B<span className="text-red">-35</span>
       </span>
-      {!compact && <span className="text-[9px] font-bold tracking-[0.2em] text-mu2 uppercase">Central de mando</span>}
+      {!compact && (
+        <span className="cad-brand-sub text-[9px] font-bold tracking-[0.2em] text-mu2 uppercase">Central de mando</span>
+      )}
     </span>
   );
 }
@@ -81,7 +84,7 @@ export interface ViperRailProps {
   simBusy: boolean;
   theme: "dark" | "light";
   units: UnitDTO[];
-  followUnitId: number | null;
+  unreadChat: number;
   onToggleDrawer: () => void;
   onToggleTheme: () => void;
   onToggleSound: () => void;
@@ -89,8 +92,8 @@ export interface ViperRailProps {
   onNewReport: () => void;
   onOpenHydrants: () => void;
   onOpenChat: () => void;
-  unreadChat: number;
-  onFollowUnit: (id: number | null) => void;
+  /** Mesa de control del parque: alta/baja/modificar + estado por unidad */
+  onOpenUnits: () => void;
 }
 
 export function ViperRail({
@@ -100,7 +103,7 @@ export function ViperRail({
   simBusy,
   theme,
   units,
-  followUnitId,
+  unreadChat,
   onToggleDrawer,
   onToggleTheme,
   onToggleSound,
@@ -108,90 +111,86 @@ export function ViperRail({
   onNewReport,
   onOpenHydrants,
   onOpenChat,
-  unreadChat,
-  onFollowUnit,
+  onOpenUnits,
 }: ViperRailProps) {
+  const libres = units.filter((u) => u.status === "disponible").length;
+  /* SIN CINTA: botones sueltos sobre el mapa (mismo lenguaje que la tablet).
+     El header completo es pointer-events-none y cada botón reactiva su zona —
+     el mapa sigue paneándose entre medias. */
   return (
-    <header
-      className="chrome-top absolute inset-x-2 top-2 z-20 flex h-12 shrink-0 items-center gap-2 overflow-x-auto rounded-xl border border-line px-2"
-      aria-label="Cabina B-35"
-    >
-      {/* Marca + cajón */}
-      <button
-        type="button"
-        onClick={onToggleDrawer}
-        className="flex shrink-0 items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-panel2/70"
-        title="Abrir el cajón de módulos"
-        aria-label="Abrir cajón"
-      >
-        <Siren size={18} weight="fill" className="text-red" aria-hidden="true" />
-        <Brand />
-      </button>
-      <div
-        className={`flex shrink-0 items-center gap-1.5 rounded border px-2 py-1 ${
-          live ? "border-green/35 bg-green/10" : "border-amber/45 bg-amber/10"
-        }`}
-        role="status"
-        title={live ? "Datos en tiempo real activos" : "Reconectando"}
-      >
-        <Broadcast size={12} className={live ? "text-green" : "text-amber anim-blink"} aria-hidden="true" />
-        <span
-          className={`text-[9px] font-bold tracking-widest uppercase ${live ? "text-green" : "text-amber"}`}
+    <header className="absolute inset-0 z-20 pointer-events-none" aria-label="Cabina B-35">
+      {/* Marca + cajón — botón flotante arriba a la izquierda */}
+      <div className="absolute left-2 top-2 flex items-center">
+        <button
+          type="button"
+          onClick={onToggleDrawer}
+          className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-lg border border-line bg-panel/90 px-2 py-1.5 shadow-md backdrop-blur hover:bg-panel2/80"
+          title="Abrir el cajón de módulos"
+          aria-label="Abrir cajón"
         >
-          {live ? "En vivo" : "Reconectando"}
+          <Siren size={17} weight="fill" className="text-red" aria-hidden="true" />
+          <Brand />
+        </button>
+      </div>
+
+      {/* En vivo + reloj — botones flotantes arriba a la derecha */}
+      <div className="absolute right-2 top-2 flex items-center gap-1.5">
+        <div
+          className={`pointer-events-auto flex shrink-0 items-center gap-1.5 rounded-lg border bg-panel/90 px-2 py-1 shadow-md backdrop-blur ${
+            live ? "border-green/35" : "border-amber/45"
+          }`}
+          role="status"
+          title={live ? "Datos en tiempo real activos" : "Reconectando"}
+        >
+          <Broadcast size={12} className={live ? "text-green" : "text-amber anim-blink"} aria-hidden="true" />
+          <span
+            className={`text-[9px] font-bold tracking-widest uppercase ${live ? "text-green" : "text-amber"}`}
+          >
+            {live ? "En vivo" : "Reconectando"}
+          </span>
+        </div>
+        <span className="pointer-events-auto inline-flex rounded-lg shadow-md">
+          <ViperClock />
         </span>
       </div>
-      {/* Hora y fecha del servicio: junta al indicador de línea, no flota */}
-      <ViperClock />
 
-      {/* Unidades: integradas a la cinta (sin cajas), toque = seguir cámara */}
-      <div className="flex shrink-0 items-center gap-0.5 pl-1">
-        {units.slice(0, 8).map((u) => (
-          <button
-            key={u.id}
-            type="button"
-            onClick={() => onFollowUnit(followUnitId === u.id ? null : u.id)}
-            title={`${u.code} · ${u.name} — clic para seguir la cámara`}
-            className={`flex shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2 py-1 text-[10.5px] font-bold transition-colors ${
-              followUnitId === u.id ? "border-amber bg-amber/10 text-amber" : "text-tx hover:bg-panel2/70"
-            }`}
-          >
-            <span
-              className="h-2 w-2 rounded-full"
-              style={{ background: STATUS_COLOR[u.status] }}
-              aria-hidden="true"
-            />
-            {u.code}
-            <span className="font-mono text-[9px] text-mu2">{CLAVE_BY_STATUS[u.status]}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="flex-1 min-w-2" />
-
-      {/* Píldoras rápidas — todas con función real del CAD */}
-      <button type="button" className="btn btn-sm btn-red shrink-0" onClick={onOpenHydrants} title="Directorio de hidrantes (grifos)">
+      {/* Acciones rápidas — fila de botones sueltos bajo la marca */}
+      <div className="absolute left-2 top-[3.4rem] flex max-w-[calc(100vw-1rem)] flex-wrap items-center gap-1.5">
+      <button type="button" className="btn btn-sm btn-red pointer-events-auto shadow-md" onClick={onOpenHydrants} title="Directorio de hidrantes (grifos)">
         <Drop size={14} aria-hidden="true" /> <span className="hidden sm:inline">Grifos</span>
       </button>
       {/* NUEVO — el botón que no se puede pasar por alto */}
       <button
         type="button"
-        className="anim-pulse-ring relative flex shrink-0 items-center gap-1.5 rounded-lg bg-red px-3.5 py-2 text-[12.5px] font-bold text-white transition-transform hover:scale-[1.04]"
+        className="anim-pulse-ring pointer-events-auto relative flex shrink-0 items-center gap-1.5 rounded-lg bg-red px-3.5 py-2 text-[12.5px] font-bold text-white shadow-md transition-transform hover:scale-[1.04]"
         onClick={onNewReport}
         title="Registrar un reporte manual"
       >
         <Plus size={15} weight="bold" aria-hidden="true" /> Nuevo
       </button>
-      <button type="button" className="btn btn-sm shrink-0" onClick={onSimulate} disabled={simBusy} title="Simular reporte por WhatsApp">
+      {/* UNIDADES — vínculo a la mesa de control del parque */}
+      <button
+        type="button"
+        className="btn btn-sm pointer-events-auto shadow-md"
+        onClick={onOpenUnits}
+        title="Unidades: agregar, quitar, modificar y ver el estado de cada una"
+      >
+        <Truck size={14} aria-hidden="true" />
+        <span className="hidden sm:inline">Unidades</span>
+        <span className="rounded-full bg-green/15 px-1.5 font-mono text-[9.5px] font-bold text-green">
+          {libres}/{units.length}
+        </span>
+      </button>
+      <button type="button" className="btn btn-sm pointer-events-auto shadow-md" onClick={onSimulate} disabled={simBusy} title="Simular reporte por WhatsApp">
         <WhatsappLogo size={14} weight="fill" className="text-green" aria-hidden="true" />
         <span className="hidden md:inline">{simBusy ? "Recibiendo…" : "Simular"}</span>
       </button>
-      <Link href="/reportes" className="btn btn-sm shrink-0" title="Informe de tiempos de respuesta (P50/P90)">
+      <Link href="/reportes" className="btn btn-sm pointer-events-auto shadow-md" title="Informe de tiempos de respuesta (P50/P90)">
         <ChartBar size={14} aria-hidden="true" /> <span className="hidden md:inline">Informe</span>
       </Link>
       <button
         type="button"
-        className="btn btn-sm relative shrink-0"
+        className="btn btn-sm pointer-events-auto relative shadow-md"
         onClick={onOpenChat}
         title="Chat con las unidades"
         aria-label={unreadChat > 0 ? `Chat con unidades: ${unreadChat} sin leer` : "Chat con unidades"}
@@ -209,7 +208,7 @@ export function ViperRail({
       </button>
       <button
         type="button"
-        className="btn btn-sm shrink-0"
+        className="btn btn-sm pointer-events-auto shadow-md"
         onClick={onToggleSound}
         title={soundOn ? "Alertas sonoras activadas" : "Alertas silenciadas"}
         aria-label={soundOn ? "Silenciar alertas" : "Activar alertas sonoras"}
@@ -218,7 +217,7 @@ export function ViperRail({
       </button>
       <button
         type="button"
-        className="btn btn-sm shrink-0"
+        className="btn btn-sm pointer-events-auto shadow-md"
         onClick={onToggleTheme}
         title={theme === "dark" ? "Modo claro" : "Modo oscuro"}
         aria-label={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
@@ -228,6 +227,7 @@ export function ViperRail({
       <span className="hidden shrink-0 items-center pl-1 text-[10px] leading-none text-mu2 xl:flex" title={`Sesión: ${op.email}`}>
         {op.name}
       </span>
+      </div>
     </header>
   );
 }
@@ -447,7 +447,7 @@ export function ViperClock() {
       <strong className="display text-[13.5px] font-bold leading-none tabular-nums text-tx">
         {pad(now.getHours())}:{pad(now.getMinutes())}:{pad(now.getSeconds())}
       </strong>
-      <span className="text-[9px] font-bold tracking-wider text-mu2">
+      <span className="cad-clock-date text-[9px] font-bold tracking-wider text-mu2">
         {dias[now.getDay()]} {pad(now.getDate())}/{meses[now.getMonth()]}
       </span>
     </div>

@@ -38,10 +38,22 @@ interface Props {
   onClose: () => void;
   onSave: () => void;
   onStartPick: () => void;
+  /** Modo edición: cambia título y etiqueta (el guardado hace PATCH) */
+  title?: string;
+  saveLabel?: string;
 }
 
 /** Registro de una unidad del parque: identificación, compañía y ubicación */
-export default function NewUnitDialog({ draft, setDraft, busy, onClose, onSave, onStartPick }: Props) {
+export default function NewUnitDialog({
+  draft,
+  setDraft,
+  busy,
+  onClose,
+  onSave,
+  onStartPick,
+  title = "Agregar unidad",
+  saveLabel = "Registrar unidad",
+}: Props) {
   const [geoBusy, setGeoBusy] = useState(false);
   const [touched, setTouched] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -102,7 +114,7 @@ export default function NewUnitDialog({ draft, setDraft, busy, onClose, onSave, 
       className="fixed inset-0 z-[1000] grid place-items-center bg-black/65 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Agregar unidad"
+      aria-label={title}
     >
       <div
         ref={panelRef}
@@ -117,7 +129,7 @@ export default function NewUnitDialog({ draft, setDraft, busy, onClose, onSave, 
           {...handleProps}
         >
           <h2 className="display flex items-center gap-2 text-base font-bold tracking-wide uppercase">
-            <Truck size={17} weight="fill" className="text-blue" aria-hidden="true" /> Agregar unidad
+            <Truck size={17} weight="fill" className="text-blue" aria-hidden="true" /> {title}
           </h2>
           <button className="btn btn-sm btn-ghost" onClick={onClose} aria-label="Cerrar">
             <X size={15} aria-hidden="true" />
@@ -278,7 +290,7 @@ export default function NewUnitDialog({ draft, setDraft, busy, onClose, onSave, 
             }}
             disabled={busy}
           >
-            {busy ? "Registrando…" : "Registrar unidad"}
+            {busy ? "Guardando…" : saveLabel}
           </button>
         </footer>
       </div>

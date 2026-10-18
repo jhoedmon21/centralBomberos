@@ -394,6 +394,18 @@
     animation: pulseRing 1.6s ease-out infinite;
   }
 
+  /* Cabina sin cinta: pantallas angostas acortan marca y reloj */
+  @media (max-width: 900px) {
+    .cad-brand-sub {
+      display: none;
+    }
+  }
+  @media (max-width: 640px) {
+    .cad-clock-date {
+      display: none;
+    }
+  }
+
   /* Paneles flotantes sobre el mapa */
   .map-panel {
     background: color-mix(in srgb, var(--panel) 86%, transparent);

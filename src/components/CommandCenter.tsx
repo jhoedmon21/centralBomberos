@@ -43,6 +43,7 @@ import MiClaveDialog from "./MiClaveDialog";
 import PreplanViewDialog from "./PreplanViewDialog";
 import UsersDialog from "./UsersDialog";
 import { STATUS_COLOR, ViperClock, ViperDrawer, ViperRail, ViperStrip } from "./ViperChrome";
+import UnitsPanel from "./UnitsPanel";
 import type { LayersState } from "./MapView";
 
 const MapView = dynamic(() => import("./MapView"), {
@@ -201,6 +202,11 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
   const [hydrantBusy, setHydrantBusy] = useState(false);
   const [unitOpen, setUnitOpen] = useState(false);
   const [unitDraft, setUnitDraft] = useState<UnitDraft>(EMPTY_UNIT_DRAFT);
+  /** Mesa de control del parque (agregar/quitar/modificar/ver estado) */
+  const [unitsOpen, setUnitsOpen] = useState(false);
+  /** Unidad en edición (null = alta nueva) — el PATCH toca estado/dotación/ubicación */
+  const [editUnit, setEditUnit] = useState<UnitDTO | null>(null);
+  const [unitBusyRow, setUnitBusyRow] = useState<number | null>(null);
   const [unitBusy, setUnitBusy] = useState(false);
 
   // ----- Tema -----
@@ -816,7 +822,24 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
   // ----- Unidades: alta y baja -----
 
   function openNewUnit() {
+    setEditUnit(null);
     setUnitDraft(EMPTY_UNIT_DRAFT);
+    setUnitOpen(true);
+  }
+
+  /** Modificar una unidad: el PATCH toca estado, dotación y posición */
+  function openEditUnit(u: UnitDTO) {
+    setEditUnit(u);
+    setUnitDraft({
+      code: u.code,
+      name: u.name,
+      type: u.type,
+      status: u.status,
+      station: u.station ?? "",
+      crew: u.crew != null ? String(u.crew) : "",
+      lat: u.lat != null ? u.lat.toFixed(5) : EMPTY_UNIT_DRAFT.lat,
+      lng: u.lng != null ? u.lng.toFixed(5) : EMPTY_UNIT_DRAFT.lng,
+    });
     setUnitOpen(true);
   }
 
@@ -828,22 +851,38 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
   async function saveUnit() {
     setUnitBusy(true);
     try {
-      const d = await jfetch<{ unit: UnitDTO }>("/api/units", {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({
-          code: unitDraft.code,
-          name: unitDraft.name,
-          type: unitDraft.type,
-          status: unitDraft.status,
-          station: unitDraft.station.trim() || null,
-          crew: unitDraft.crew.trim() === "" ? null : Number(unitDraft.crew),
-          lat: Number(unitDraft.lat),
-          lng: Number(unitDraft.lng),
-        }),
-      });
-      toast.success(`Unidad ${d.unit.code} registrada`);
+      if (editUnit) {
+        // Modificar: estado, dotación y ubicación (lo demás no es editable aquí)
+        const d = await jfetch<{ unit: UnitDTO }>(`/api/units/${editUnit.id}`, {
+          method: "PATCH",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({
+            status: unitDraft.status,
+            crew: unitDraft.crew.trim() === "" ? null : Number(unitDraft.crew),
+            lat: Number(unitDraft.lat),
+            lng: Number(unitDraft.lng),
+          }),
+        });
+        toast.success(`Unidad ${d.unit.code} actualizada`);
+      } else {
+        const d = await jfetch<{ unit: UnitDTO }>("/api/units", {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({
+            code: unitDraft.code,
+            name: unitDraft.name,
+            type: unitDraft.type,
+            status: unitDraft.status,
+            station: unitDraft.station.trim() || null,
+            crew: unitDraft.crew.trim() === "" ? null : Number(unitDraft.crew),
+            lat: Number(unitDraft.lat),
+            lng: Number(unitDraft.lng),
+          }),
+        });
+        toast.success(`Unidad ${d.unit.code} registrada`);
+      }
       setUnitOpen(false);
+      setEditUnit(null);
       setUnitDraft(EMPTY_UNIT_DRAFT);
       void refresh();
     } catch (e) {
@@ -913,7 +952,6 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
           simBusy={simBusy}
           theme={theme}
           units={units}
-          followUnitId={followUnitId}
           onToggleDrawer={toggleDrawer}
           onToggleTheme={toggleTheme}
           onToggleSound={toggleSound}
@@ -924,9 +962,34 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
           }}
           onOpenHydrants={() => setHydrantsOpen(true)}
           onOpenChat={() => setChatPickOpen((v) => !v)}
+          onOpenUnits={() => setUnitsOpen(true)}
           unreadChat={unreadChatUnits.size}
-          onFollowUnit={setFollowUnitId}
         />
+
+        {unitsOpen && (
+          <UnitsPanel
+            units={units}
+            role={op.role}
+            busyId={unitBusyRow}
+            followingId={followUnitId}
+            onClose={() => setUnitsOpen(false)}
+            onAdd={() => {
+              setUnitsOpen(false);
+              openNewUnit();
+            }}
+            onEdit={(u) => {
+              setUnitsOpen(false);
+              openEditUnit(u);
+            }}
+            onRemove={(u) => {
+              setUnitBusyRow(u.id);
+              void removeUnit(u.id)
+                .catch(() => {})
+                .finally(() => setUnitBusyRow(null));
+            }}
+            onFollow={setFollowUnitId}
+          />
+        )}
 
         {drawerOpen && (
           <ViperDrawer
@@ -958,7 +1021,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         {/* Selector de unidad para conversar (píldora Chat / cajón) */}
         {chatPickOpen && (
           <div
-            className="map-panel absolute right-2 top-16 z-10 flex max-h-[60vh] w-[252px] max-w-[92vw] flex-col overflow-hidden rounded-xl"
+            className="map-panel absolute right-2 top-24 z-10 flex max-h-[60vh] w-[252px] max-w-[92vw] flex-col overflow-hidden rounded-xl"
             role="dialog"
             aria-label="Elegir unidad para conversar"
           >
@@ -1001,7 +1064,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         {/* Reportes: tarjeta flotante IZQUIERDA sobre el mapa */}
         {queueOpen && (
           <aside
-            className="map-panel absolute left-2 top-16 bottom-16 z-10 flex w-[320px] max-w-[92vw] flex-col overflow-hidden rounded-xl lg:bottom-2"
+            className="map-panel absolute left-2 top-24 bottom-16 z-10 flex w-[320px] max-w-[92vw] flex-col overflow-hidden rounded-xl lg:bottom-2"
             aria-label="Reportes activos"
           >
             <IncidentQueue
@@ -1027,7 +1090,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         {/* Detalle: tarjeta flotante DERECHA sobre el mapa */}
         {detailOpen && (
           <aside
-            className="map-panel absolute right-2 top-16 bottom-16 z-10 flex w-[385px] max-w-[92vw] flex-col overflow-hidden rounded-xl lg:bottom-2"
+            className="map-panel absolute right-2 top-24 bottom-16 z-10 flex w-[385px] max-w-[92vw] flex-col overflow-hidden rounded-xl lg:bottom-2"
             aria-label="Detalle del reporte"
           >
             <DetailPanel
@@ -1156,7 +1219,12 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
           draft={unitDraft}
           setDraft={setUnitDraft}
           busy={unitBusy}
-          onClose={() => setUnitOpen(false)}
+          title={editUnit ? "Modificar unidad" : "Agregar unidad"}
+          saveLabel={editUnit ? "Guardar cambios" : "Registrar unidad"}
+          onClose={() => {
+            setEditUnit(null);
+            setUnitOpen(false);
+          }}
           onSave={saveUnit}
           onStartPick={startPickUnit}
         />

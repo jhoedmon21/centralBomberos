@@ -632,6 +632,9 @@
   font-size: 10px;
 }
 .mk-unit .dot {
+  display: flex;
+  align-items: center;
+  gap: 3px;
   min-width: 30px;
   height: 19px;
   padding: 0 4px;

@@ -37,6 +37,10 @@ import type {
   UnitType,
 } from "./types";
 
+// Preplans viven en su propio módulo (fichas de riesgo); se reexporta
+// para que la carga inicial de la central use la misma puerta que el resto.
+export { listPreplans } from "./preplans";
+
 const INCIDENT_STATUSES: IncidentStatus[] = [
   "reportado",
   "despachado",

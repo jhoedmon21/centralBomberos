@@ -63,3 +63,13 @@ export function maskPhone(s: string | null): string {
   if (d.length < 6) return d;
   return `+${d.slice(0, 2)} ${d[2]}•• ••• ${d.slice(-3)}`;
 }
+
+/**
+ * Nombre visible del hidrante: el código «H-01» se lee «Hidrante 01».
+ * Otros formatos (p. ej. «OSM-123456») quedan tal cual; sin código → «Hidrante».
+ */
+export function hydrantLabel(code: string | null | undefined): string {
+  if (!code) return "Hidrante";
+  const m = /^H[-\s]?(\S+)$/i.exec(code.trim());
+  return m ? `Hidrante ${m[1]}` : code;
+}

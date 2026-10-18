@@ -1,6 +1,6 @@
 // Geometría: distancias y selección de recursos cercanos
 
-import type { HydrantDTO } from "./types";
+import type { HydrantDTO, PreplanDTO } from "./types";
 
 const R_TIERRA_M = 6_371_000;
 
@@ -18,6 +18,26 @@ export function haversineM(lat1: number, lng1: number, lat2: number, lng2: numbe
 export interface HydrantNear {
   hydrant: HydrantDTO;
   meters: number;
+}
+
+/** El preplan ACTIVO más cercano a un punto, solo si queda dentro de `meters` (null si no) */
+export function nearestPreplan(
+  lat: number,
+  lng: number,
+  preplans: PreplanDTO[],
+  meters: number,
+): PreplanDTO | null {
+  let best: PreplanDTO | null = null;
+  let bestM = Infinity;
+  for (const p of preplans) {
+    if (p.status !== "activo") continue;
+    const m = haversineM(lat, lng, p.lat, p.lng);
+    if (m < bestM) {
+      bestM = m;
+      best = p;
+    }
+  }
+  return bestM <= meters ? best : null;
 }
 
 /** Los N hidrantes más cercanos a un punto, ordenados por distancia */

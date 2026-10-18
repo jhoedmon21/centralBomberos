@@ -5,6 +5,8 @@
 
 import { ApiError, jsonError } from "@/lib/errors";
 import { broadcast } from "@/lib/bus";
+import { logAudit } from "@/lib/audit";
+import { operatorActor, requireOperator } from "@/lib/opauth";
 import { prisma } from "@/lib/db";
 import { sendPushToUnit } from "@/lib/push";
 import { dispatchIncident } from "@/lib/queries";
@@ -13,6 +15,7 @@ const ACCEPT_TIMEOUT_MS = 60_000;
 
 export async function POST(request: Request, ctx: RouteContext<"/api/incidents/[id]/dispatch">) {
   try {
+    const op = await requireOperator(request, ["jefe", "operador"]);
     const { id } = await ctx.params;
     const body = await request.json().catch(() => null);
     // unitIds: array; unitId (solo) queda soportado por compatibilidad
@@ -32,6 +35,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/incidents/[
     );
     const freshIds = unitIds.filter((n: number) => !prevIds.has(n));
     const incident = await dispatchIncident(incidentId, unitIds);
+    logAudit(operatorActor(op), "dispatch", { incidentId, units: unitIds });
 
     for (const unitId of freshIds) {
       // Notificar a la tablet (Web Push de prioridad alta; la app en primer

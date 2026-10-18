@@ -167,6 +167,71 @@ export interface SettingsDTO {
   public_base: string;
 }
 
+/** Instantánea mínima que viaja en algunos eventos SSE (p. ej. posición
+ * GPS): permite aplicar el cambio en la central SIN refetch completo. */
+export interface UnitSnapshotDTO {
+  id: number;
+  code: string;
+  lat: number | null;
+  lng: number | null;
+  status: UnitStatus;
+}
+
+/** Recorrido histórico de una unidad (GeoJSON [lng,lat] + distancia total) */
+export interface TrackDTO {
+  points: [number, number][];
+  meters: number;
+  count: number;
+}
+
+/** Mensaje del chat corto entre central y unidad */
+export interface ChatDTO {
+  id: number;
+  from: "central" | "unidad";
+  body: string;
+  at: string;
+}
+
+/** Rol de un operador de la central CAD */
+export type OperatorRole = "jefe" | "operador" | "lectura";
+
+export interface OperatorDTO {
+  id: number;
+  name: string;
+  email: string;
+  role: OperatorRole;
+}
+
+/** Entrada de la bitácora del sistema (auditoría) */
+export interface AuditDTO {
+  id: number;
+  actor: string;
+  action: string;
+  detail: string | null;
+  at: string;
+}
+
+/** Ficha operativa de un edificio de riesgo (preplan) */
+export interface PreplanDTO {
+  id: number;
+  title: string;
+  address: string;
+  lat: number;
+  lng: number;
+  layout: string | null;
+  hazards: string | null;
+  keysInfo: string | null;
+  waterSources: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  notes: string | null;
+  photos: string[];
+  status: "activo" | "inactivo";
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** Evento emitido por SSE */
 export interface LiveEvent {
   type:
@@ -175,6 +240,8 @@ export interface LiveEvent {
     | "activity"
     | "settings"
     | "hydrant"
+    | "chat"
+    | "preplan"
     | "hello"
     // Eventos de la app de unidades (FuegoMap Unidades)
     | "unit_mission" // despacho asignado a una unidad
@@ -185,5 +252,9 @@ export interface LiveEvent {
   title?: string;
   /** Id de la unidad destinataria (eventos de la app) */
   unitId?: number;
+  /** Instantánea de la unidad (posición/estado) para parche incremental */
+  unit?: UnitSnapshotDTO;
+  /** Mensaje de chat difundido en vivo */
+  chat?: { id: number; unitId: number; from: "central" | "unidad"; body: string; at: string };
   at: number;
 }

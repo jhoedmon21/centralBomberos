@@ -33,6 +33,51 @@ export const locationSchema = z.object({
   at: z.number().int().nonnegative().optional(),
 });
 
+export const chatSchema = z.object({
+  body: z.string().trim().min(1, "Mensaje vacío").max(1000, "Máximo 1000 caracteres"),
+});
+
+// ---------- Central CAD: operadores, auditoría, preplans ----------
+
+export const operatorLoginSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Correo no válido"),
+  password: z.string().min(4, "Clave demasiado corta"),
+});
+
+export const operatorSelfPatchSchema = z.object({
+  current: z.string().min(1, "Ingresa tu clave actual"),
+  password: z.string().min(8, "Nueva clave: mínimo 8 caracteres"),
+});
+
+export const operatorUserCreateSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Correo no válido"),
+  name: z.string().trim().min(2, "Nombre muy corto").max(60),
+  role: z.enum(["jefe", "operador", "lectura"]).default("operador"),
+  password: z.string().min(8, "Clave: mínimo 8 caracteres"),
+});
+
+export const operatorUserPatchSchema = z.object({
+  role: z.enum(["jefe", "operador", "lectura"]).optional(),
+  active: z.boolean().optional(),
+  password: z.string().min(8, "Clave: mínimo 8 caracteres").optional(),
+});
+
+export const preplanSchema = z.object({
+  title: z.string().trim().min(2, "Título requerido").max(120),
+  address: z.string().trim().min(3, "Dirección requerida").max(200),
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  layout: z.string().trim().max(2000).nullable().optional(),
+  hazards: z.string().trim().max(2000).nullable().optional(),
+  keysInfo: z.string().trim().max(2000).nullable().optional(),
+  waterSources: z.string().trim().max(2000).nullable().optional(),
+  contactName: z.string().trim().max(120).nullable().optional(),
+  contactPhone: z.string().trim().max(40).nullable().optional(),
+  notes: z.string().trim().max(4000).nullable().optional(),
+  photos: z.array(z.string().max(100_000)).max(8, "Máximo 8 fotos").optional(),
+  status: z.enum(["activo", "inactivo"]).optional(),
+});
+
 export const pushSubscriptionSchema = z.object({
   endpoint: z.string().url(),
   keys: z.object({

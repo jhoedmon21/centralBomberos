@@ -3,6 +3,12 @@
 
 import { connection } from "next/server";
 import { subscribe } from "@/lib/bus";
+import { prisma } from "@/lib/db";
+
+// Latido laboral: además del comentario SSE, un SELECT 1 mantiene templado el
+// compute de Neon (el plan gratuito lo apaga tras ~5 min sin consultas; un
+// arranque en frío añade 1-3 s a las siguientes consultas del tablero).
+const KEEPALIVE_MS = 60_000;
 
 export async function GET() {
   // Garantiza ejecución en tiempo de petición (Cache Components)
@@ -10,6 +16,7 @@ export async function GET() {
 
   const encoder = new TextEncoder();
   let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let keepalive: ReturnType<typeof setInterval> | undefined;
   let unsubscribe: (() => void) | undefined;
 
   const stream = new ReadableStream<Uint8Array>({
@@ -30,9 +37,15 @@ export async function GET() {
           /* ignorar */
         }
       }, 25_000);
+      keepalive = setInterval(() => {
+        void prisma.$queryRaw`SELECT 1`.catch(() => {
+          /* la BD responde cuando pueda; el SSE no depende de esto */
+        });
+      }, KEEPALIVE_MS);
     },
     cancel() {
       if (heartbeat) clearInterval(heartbeat);
+      if (keepalive) clearInterval(keepalive);
       unsubscribe?.();
     },
   });

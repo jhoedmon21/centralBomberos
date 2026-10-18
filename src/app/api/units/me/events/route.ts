@@ -54,6 +54,8 @@ export async function GET(request: Request) {
             (ev.type === "mission_unaccepted" && ev.unitId === auth.unitId) ||
             (ev.type === "unit_logout" && ev.unitId === auth.unitId) ||
             (ev.type === "unit" && ev.id === auth.unitId) ||
+            // Mensajes del chat con esta unidad (central ↔ unidad)
+            (ev.type === "chat" && ev.unitId === auth.unitId) ||
             // Alerta global: cada emergencia nueva avisa a todos los bomberos
             (ev.type === "incident" && (ev.action === "created" || ev.id === missionId)) ||
             ev.type === "hydrant";

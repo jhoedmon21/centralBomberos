@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   Bell,
+  Buildings,
   CheckCircle,
   Drop,
   FilePdf,
@@ -25,11 +26,13 @@ import type {
   HydrantDTO,
   IncidentDTO,
   IncidentStatus,
+  PreplanDTO,
   UnitDTO,
   UnitStatus,
 } from "@/lib/types";
-import { cx, displayCode, fmtCoords, fmtDateTime, fmtDistance, maskPhone } from "@/lib/utils";
+import { cx, displayCode, fmtCoords, fmtDateTime, fmtDistance, hydrantLabel, maskPhone } from "@/lib/utils";
 import ActivityFeed from "./ActivityFeed";
+import IncidentIcon from "./IncidentIcon";
 import Timeline from "./Timeline";
 import UnitsBoard from "./UnitsBoard";
 
@@ -37,6 +40,67 @@ const HydrantMiniMap = dynamic(() => import("./HydrantMiniMap"), {
   ssr: false,
   loading: () => <div className="h-40 w-full animate-pulse rounded border border-line bg-panel2" />,
 });
+
+// ------------------------------------------------------------------
+// ETA en vivo: ruta vial de la posición ACTUAL de la unidad a la escena
+// (First Due/A Bordo-style: «dónde está Y CUÁNDO LLEGA»). El endpoint
+// /api/route cachea 10 min en el servidor; el chip se repite cada 90 s.
+// ------------------------------------------------------------------
+
+function EtaChip({
+  fromLat,
+  fromLng,
+  sceneLat,
+  sceneLng,
+}: {
+  fromLat: number;
+  fromLng: number;
+  sceneLat: number;
+  sceneLng: number;
+}) {
+  const [eta, setEta] = useState<{ minutes: number; meters: number } | null>(null);
+
+  const meta = useMemo(() => {
+    const from = `${fromLat},${fromLng}`;
+    const scene = `${sceneLat},${sceneLng}`;
+    return { from, scene };
+  }, [fromLat, fromLng, sceneLat, sceneLng]);
+
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const r = await fetch(`/api/route?from=${meta.from}&to=${meta.scene}`);
+        const d = (await r.json()) as {
+          route?: { meters: number; seconds: number; estimated: boolean };
+        };
+        if (!alive) return;
+        if (d.route) {
+          setEta({ minutes: Math.max(1, Math.round(d.route.seconds / 60)), meters: d.route.meters });
+        }
+      } catch {
+        /* silencioso: el chip aparece cuando OSRM responda */
+      }
+    };
+    void tick();
+    const iv = setInterval(tick, 90_000);
+    return () => {
+      alive = false;
+      clearInterval(iv);
+    };
+  }, [meta]);
+
+  if (!eta) return null;
+  return (
+    <span
+      className="chip shrink-0 font-mono text-[10px]"
+      style={{ color: "var(--st-despachado)" }}
+      title="Llegada estimada por ruta vial (OSRM) desde la posición actual de la unidad"
+    >
+      ~{eta.minutes} min · {fmtDistance(eta.meters)}
+    </span>
+  );
+}
 
 export type DetailTab = "detalle" | "unidades" | "actividad";
 
@@ -67,6 +131,8 @@ interface Props {
   routeForId: number | null;
   /** Trazar/quitar la ruta vial en el mapa de la central */
   onRoute: (i: IncidentDTO) => void;
+  /** Preplan activo a <300 m de la escena (auto-ficha al llegar) */
+  preplanNear: PreplanDTO | null;
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -103,6 +169,7 @@ export default function DetailPanel({
   onSetCrew,
   routeForId,
   onRoute,
+  preplanNear,
 }: Props) {
   const shown = incident ?? fallback;
   // Confirmación de dos pasos: se "arma" contra la clave del incidente
@@ -171,6 +238,62 @@ export default function DetailPanel({
         ))}
       </div>
 
+      {/* Auto-ficha de preplan: la escena cayó a <300 m de un edificio con ficha.
+          First Due abre el preplan al acercarse; aquí se abre al seleccionarlo. */}
+      {tab === "detalle" && preplanNear && (
+        <div className="shrink-0 border-b border-amber/40 bg-amber/10 px-3 py-2.5">
+          <div className="flex items-start gap-2">
+            <Buildings size={16} className="mt-0.5 shrink-0 text-amber" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[9.5px] font-bold tracking-[0.18em] text-amber uppercase">
+                Preplan en escena · {preplanNear.address}
+              </p>
+              <p className="display mt-0.5 text-[14px] leading-tight font-bold">{preplanNear.title}</p>
+              <div className="mt-1 space-y-0.5 text-[11.5px] leading-snug">
+                {preplanNear.hazards && (
+                  <p>
+                    <span className="font-bold tracking-wider text-mu2 uppercase">Peligros: </span>
+                    {preplanNear.hazards}
+                  </p>
+                )}
+                {preplanNear.keysInfo && (
+                  <p>
+                    <span className="font-bold tracking-wider text-mu2 uppercase">Llaves: </span>
+                    {preplanNear.keysInfo}
+                  </p>
+                )}
+                {preplanNear.waterSources && (
+                  <p>
+                    <span className="font-bold tracking-wider text-mu2 uppercase">Agua: </span>
+                    {preplanNear.waterSources}
+                  </p>
+                )}
+                {preplanNear.contactPhone && (
+                  <p className="flex items-center gap-1">
+                    <Phone size={11} aria-hidden="true" /> {preplanNear.contactName ?? "Contacto"} ·{" "}
+                    <span className="font-mono">{preplanNear.contactPhone}</span>
+                  </p>
+                )}
+              </div>
+              {preplanNear.photos.length > 0 && (
+                <div className="mt-1.5 flex gap-1.5">
+                  {preplanNear.photos.slice(0, 4).map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={url}
+                        alt={`Foto ${i + 1} del preplan ${preplanNear.title}`}
+                        className="h-14 w-20 rounded border border-line object-cover"
+                      />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Contenido */}
       <div
         id="fw-detail-panel"
@@ -221,7 +344,20 @@ export default function DetailPanel({
                     {displayCode(shown.id, shown.createdAt)}
                   </span>
                 </div>
-                <h2 className="display mt-2 text-xl leading-tight font-bold">{shown.title}</h2>
+                <h2 className="display mt-2 flex items-start gap-2 text-xl leading-tight font-bold">
+                  <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-red/10 text-red">
+                    <IncidentIcon title={shown.title} size={15} />
+                  </span>
+                  {shown.title}
+                </h2>
+                {shown.severity === "critica" && shown.status !== "cerrado" && (
+                  <div
+                    role="alert"
+                    className="mt-2 flex items-center gap-1.5 rounded border border-red/60 bg-red/10 px-2 py-1.5 text-[11.5px] font-bold tracking-wider text-red uppercase"
+                  >
+                    <Fire size={13} weight="fill" aria-hidden="true" /> Severidad crítica — prioridad de despacho
+                  </div>
+                )}
                 <p className="mt-1 flex items-start gap-1.5 text-[12.5px] text-mu">
                   <MapPin size={14} className="mt-0.5 shrink-0 text-red" aria-hidden="true" />
                   {shown.address}
@@ -273,12 +409,23 @@ export default function DetailPanel({
                   </Row>
                   <Row label="Unidad">
                     {shown.unit ? (
-                      <span className="flex items-center gap-1.5 font-semibold">
+                      <span className="flex flex-wrap items-center gap-1.5 font-semibold">
                         <Truck size={14} className="text-blue" aria-hidden="true" />
                         {shown.unit.code} — {shown.unit.name}
                         <span className="text-[11px] font-normal text-mu">
                           ({shown.unit.station ?? "sin compañía"})
                         </span>
+                        {shown.unit.status === "en_ruta" &&
+                          shown.unit.lat != null &&
+                          shown.unit.lng != null &&
+                          (shown.status === "despachado" || shown.status === "en_escena") && (
+                            <EtaChip
+                              fromLat={shown.unit.lat}
+                              fromLng={shown.unit.lng}
+                              sceneLat={shown.lat}
+                              sceneLng={shown.lng}
+                            />
+                          )}
                       </span>
                     ) : (
                       <span className="text-mu2">Sin unidad asignada</span>
@@ -288,19 +435,42 @@ export default function DetailPanel({
                   {shown.units && shown.units.length > 1 && (
                     <Row label="Asignadas">
                       <span className="flex flex-wrap gap-1">
-                        {shown.units.map((a) => (
-                          <span
-                            key={a.unitId}
-                            className={cx(
-                              "flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold",
-                              a.acceptedAt ? "border-green/60 text-green" : "border-amber/60 text-amber",
-                            )}
-                            title={a.acceptedAt ? "Aceptó el despacho" : "Pendiente de aceptar"}
-                          >
-                            <CheckCircle size={10} weight="fill" className={a.acceptedAt ? "" : "opacity-40"} aria-hidden="true" />
-                            {a.code}
-                          </span>
-                        ))}
+                        {shown.units.map((a) => {
+                          // ETA en vivo para las que avanzan hacia la escena
+                          const live = units.find((u) => u.id === a.unitId);
+                          const announce =
+                            a.acceptedAt &&
+                            live?.status === "en_ruta" &&
+                            live.lat != null &&
+                            live.lng != null &&
+                            (shown.status === "despachado" || shown.status === "en_escena");
+                          return (
+                            <span
+                              key={a.unitId}
+                              className={cx(
+                                "flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold",
+                                a.acceptedAt ? "border-green/60 text-green" : "border-amber/60 text-amber",
+                              )}
+                              title={a.acceptedAt ? "Aceptó el despacho" : "Pendiente de aceptar"}
+                            >
+                              <CheckCircle
+                                size={10}
+                                weight="fill"
+                                className={a.acceptedAt ? "" : "opacity-40"}
+                                aria-hidden="true"
+                              />
+                              {a.code}
+                              {a.acceptedAt && live?.lat != null && live?.lng != null && announce && (
+                                <EtaChip
+                                  fromLat={live.lat}
+                                  fromLng={live.lng}
+                                  sceneLat={shown.lat}
+                                  sceneLng={shown.lng}
+                                />
+                              )}
+                            </span>
+                          );
+                        })}
                       </span>
                     </Row>
                   )}
@@ -362,7 +532,7 @@ export default function DetailPanel({
                     >
                       <span className="flex items-center gap-2 text-[12.5px] font-semibold">
                         <Drop size={14} weight="fill" className="text-blue" aria-hidden="true" />
-                        {h.hydrant.code ?? `Hidrante ${idx + 1}`}
+                        {h.hydrant.code ? hydrantLabel(h.hydrant.code) : `Hidrante ${idx + 1}`}
                         <span className="text-[11px] font-normal text-mu capitalize">
                           presión {h.hydrant.pressure ?? "s/d"} · {h.hydrant.diameter ?? "—"} mm
                         </span>

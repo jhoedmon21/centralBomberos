@@ -90,6 +90,8 @@ model Unit {
   items          UnitItem[]
   pushSubs       PushSubscription[]
   dispatches     IncidentUnit[]
+  gpsPoints      GpsPoint[]
+  chatMessages   ChatMessage[]
 
   @@index([status])
 }
@@ -215,6 +217,32 @@ model Operation {
   @@index([createdAt])
 }
 
+/// Historial GPS por unidad (solo se graba con misión activa: los pings en
+/// reposo no aportan al recorrido). La posición «actual» sigue en Unit.lat/lng.
+model GpsPoint {
+  id     Int     @id @default(autoincrement())
+  unitId Int
+  unit   Unit    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  lat    Float
+  lng    Float
+  at     DateTime @default(now())
+
+  @@index([unitId, at])
+}
+
+/// Mensajería central ↔ unidad (equipo de Bryx: chat corto de comando)
+model ChatMessage {
+  id       Int      @id @default(autoincrement())
+  unitId   Int
+  unit     Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  /// central | unidad
+  fromRole String
+  body     String
+  at       DateTime @default(now())
+
+  @@index([unitId, at])
+}
+
 /// Cierre de misión reportado desde la app de la unidad
 model MissionReport {
   id             Int      @id @default(autoincrement())
@@ -241,4 +269,63 @@ model EquipmentCheck {
 
   @@unique([unitId, itemId, day])
   @@index([unitId])
+}
+
+// ============================================================
+//  Central CAD · acceso, auditoría y preplans operativos
+// ============================================================
+
+/// Operador de la central (CAD): roles jefe | operador | lectura.
+/// Separado de AppUser (tablets) para que las claves y las sesiones
+/// del operador nunca invaliden las de los vehículos.
+model OperatorUser {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         String    @default("operador") // jefe | operador | lectura
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+}
+
+/// Auditoría del sistema: quién hizo qué (accesos, despachos, borrados,
+/// cambios de configuración). La verá el jefe en «Bitácora del sistema».
+model AuditLog {
+  id     Int      @id @default(autoincrement())
+  actor  String // «Op. Nombre · jefe» | «unidad B-12» | «sistema»
+  action String // login | login_fail | logout | dispatch | unit_delete | hydrant_create | …
+  detail String? // JSON con los datos del evento
+  at     DateTime @default(now())
+
+  @@index([at])
+}
+
+/// Ficha operativa de un edificio de riesgo (preplan): lo que el equipo
+/// necesita saber al llegar — llaves de acceso, pisos, peligros, Contacto.
+model Preplan {
+  id           Int      @id @default(autoincrement())
+  title        String
+  address      String
+  lat          Float
+  lng          Float
+  /// Pisos, área, geometría del predio (texto libre)
+  layout       String?
+  /// Peligros preidentificados: LPG, gases, CICT, alta ocupación…
+  hazards      String?
+  /// Llaves de acceso, portones, tableros eléctricos
+  keysInfo     String?
+  /// Puntos de agua: cisternas, piscinas, pozos (además de los hidrantes GIS)
+  waterSources String?
+  contactName  String?
+  contactPhone String?
+  notes        String?
+  /// JSON array de URLs de fotos (fachada, accesos, interiores)
+  photos       String?
+  status       String   @default("activo") // activo | inactivo
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([lat, lng])
 }

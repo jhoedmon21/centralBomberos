@@ -7,7 +7,7 @@
 import { useEffect, useMemo } from "react";
 import type * as GeoJSON from "geojson";
 import { circleRing, OFM_STYLES } from "@/lib/geo";
-import { fmtDistance } from "@/lib/utils";
+import { fmtDistance, hydrantLabel } from "@/lib/utils";
 import { Map, MapGeoJSON, MapMarker, MarkerContent, MarkerTooltip, useMap } from "./ui/map";
 
 export interface MiniHydrant {
@@ -121,7 +121,7 @@ export default function HydrantMiniMap({ lat, lng, theme, hydrants }: Props) {
               </div>
             </MarkerContent>
             <MarkerTooltip className="border border-line2 bg-panel! text-tx!">
-              {h.code ?? "Hidrante"} · N.º {h.n} · {fmtDistance(h.meters)}
+              {hydrantLabel(h.code)} · N.º {h.n} · {fmtDistance(h.meters)}
             </MarkerTooltip>
           </MapMarker>
         ))}

@@ -1,31 +1,52 @@
 "use client";
 
+import Link from "next/link";
 import {
   Bell,
   BellSlash,
   Broadcast,
+  Buildings,
+  ChartBar,
   Drop,
   Flame,
   GearSix,
+  Key,
   Moon,
   Plus,
+  Scroll,
+  SignOut,
   Sun,
+  Users,
   WhatsappLogo,
 } from "@phosphor-icons/react";
 import { useClock } from "@/hooks/useClock";
 import { pad } from "@/lib/utils";
+import type { OperatorDTO } from "@/lib/types";
+
+const ROLE_LABEL: Record<OperatorDTO["role"], string> = {
+  jefe: "Jefe",
+  operador: "Operador",
+  lectura: "Lectura",
+};
 
 interface Props {
   live: boolean;
   soundOn: boolean;
   simBusy: boolean;
   theme: "dark" | "light";
+  /** Operador conectado al CAD (sesión) */
+  op: OperatorDTO;
   onToggleTheme: () => void;
   onToggleSound: () => void;
   onSimulate: () => void;
   onNewReport: () => void;
   onOpenSettings: () => void;
   onOpenHydrants: () => void;
+  onOpenPreplans: () => void;
+  onOpenUsers: () => void;
+  onOpenAudit: () => void;
+  onOpenMiClave: () => void;
+  onLogout: () => void;
 }
 
 export default function TopBar({
@@ -33,12 +54,18 @@ export default function TopBar({
   soundOn,
   simBusy,
   theme,
+  op,
   onToggleTheme,
   onToggleSound,
   onSimulate,
   onNewReport,
   onOpenSettings,
   onOpenHydrants,
+  onOpenPreplans,
+  onOpenUsers,
+  onOpenAudit,
+  onOpenMiClave,
+  onLogout,
 }: Props) {
   const now = useClock();
 
@@ -123,6 +150,46 @@ export default function TopBar({
       </button>
       <button
         className="btn btn-sm"
+        onClick={onOpenPreplans}
+        aria-label="Preplans de riesgo"
+        title="Fichas operativas de edificios de riesgo (preplans)"
+      >
+        <Buildings size={15} className="text-amber" aria-hidden="true" />
+        <span className="hidden lg:inline">Preplans</span>
+      </button>
+      <Link
+        href="/reportes"
+        className="btn btn-sm"
+        aria-label="Informe de tiempos de respuesta"
+        title="Informe de tiempos de respuesta (P50/P90) + PDF"
+      >
+        <ChartBar size={15} aria-hidden="true" />
+        <span className="hidden lg:inline">Reportes</span>
+      </Link>
+      {op.role === "jefe" && (
+        <>
+          <button
+            className="btn btn-sm"
+            onClick={onOpenUsers}
+            aria-label="Operadores del CAD"
+            title="Gestión de operadores del CAD (roles y accesos)"
+          >
+            <Users size={15} aria-hidden="true" />
+            <span className="hidden xl:inline">Operadores</span>
+          </button>
+          <button
+            className="btn btn-sm"
+            onClick={onOpenAudit}
+            aria-label="Bitácora del sistema"
+            title="Bitácora del sistema (auditoría)"
+          >
+            <Scroll size={15} aria-hidden="true" />
+            <span className="hidden xl:inline">Bitácora</span>
+          </button>
+        </>
+      )}
+      <button
+        className="btn btn-sm"
         onClick={onOpenSettings}
         aria-label="Configuración de la central"
         title="Configuración de la central"
@@ -140,6 +207,39 @@ export default function TopBar({
         <WhatsappLogo size={15} weight="fill" className="text-green" aria-hidden="true" />
         <span className="hidden md:inline">{simBusy ? "Recibiendo…" : "Simular reporte"}</span>
       </button>
+
+      {/* Operador conectado */}
+      <div
+        className="hidden items-center gap-2 rounded border border-line bg-panel2 px-2 py-1 xl:flex"
+        title={`Sesión: ${op.email}`}
+      >
+        <span className="grid h-5 w-5 place-items-center rounded-full bg-red/15 text-[9px] font-bold text-red">
+          {op.name.slice(0, 1).toUpperCase()}
+        </span>
+        <span className="text-[10.5px] leading-none">
+          <span className="block font-bold">{op.name}</span>
+          <span className="block text-mu2">{ROLE_LABEL[op.role]}</span>
+        </span>
+      </div>
+      <button
+        className="btn btn-sm"
+        onClick={onOpenMiClave}
+        aria-label="Cambiar mi clave"
+        title="Cambiar mi clave de acceso"
+      >
+        <Key size={15} aria-hidden="true" />
+        <span className="hidden sm:inline">Mi clave</span>
+      </button>
+      <button
+        className="btn btn-sm"
+        onClick={onLogout}
+        aria-label="Cerrar sesión del CAD"
+        title="Cerrar sesión"
+      >
+        <SignOut size={15} aria-hidden="true" />
+        <span className="hidden sm:inline">Salir</span>
+      </button>
+
       <button
         className="btn btn-sm btn-red"
         onClick={onNewReport}

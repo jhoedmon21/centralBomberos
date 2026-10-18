@@ -1,32 +1,37 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Fire, ListBullets, MapTrifold } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { useLiveFeed } from "@/hooks/useLiveFeed";
 import { playAlarm, primeAudio } from "@/lib/alarm";
-import { FIREHOUSE, nearestHydrants } from "@/lib/geo";
+import { FIREHOUSE, haversineM, nearestHydrants, nearestPreplan } from "@/lib/geo";
 import { ACTIVE_STATUSES, HYDRANT_SITUATION_META } from "@/lib/meta";
 import type {
   ActivityDTO,
+  ChatDTO,
   HydrantDTO,
   HydrantSituation,
   IncidentDTO,
   IncidentStatus,
   LiveEvent,
+  OperatorDTO,
+  PreplanDTO,
   RiskDTO,
   RouteDTO,
   SettingsDTO,
   StatsDTO,
+  TrackDTO,
   UnitDTO,
   UnitStatus,
 } from "@/lib/types";
 import { applyTheme, getServerTheme, getTheme, subscribeTheme } from "@/lib/theme";
-import { cx, displayCode, fmtDistance } from "@/lib/utils";
+import { cx, displayCode, fmtDistance, hydrantLabel } from "@/lib/utils";
 import { dispatchMessage, incomingMessage, replyMessage, setPublicBase, waLink } from "@/lib/wa";
 import DetailPanel, { type DetailTab } from "./DetailPanel";
 import DispatchDialog from "./DispatchDialog";
+import ChatPanel from "./ChatPanel";
 import HydrantDialog, { EMPTY_HYDRANT_DRAFT, type HydrantDraft } from "./HydrantDialog";
 import HydrantsDialog from "./HydrantsDialog";
 import IncidentQueue from "./IncidentQueue";
@@ -35,6 +40,11 @@ import NewUnitDialog, { EMPTY_UNIT_DRAFT, type UnitDraft } from "./NewUnitDialog
 import SettingsDialog from "./SettingsDialog";
 import StatsStrip from "./StatsStrip";
 import TopBar from "./TopBar";
+import AuditDialog from "./AuditDialog";
+import MiClaveDialog from "./MiClaveDialog";
+import PreplansDialog, { EMPTY_PREPLAN_DRAFT, type PreplanDraft } from "./PreplansDialog";
+import PreplanViewDialog from "./PreplanViewDialog";
+import UsersDialog from "./UsersDialog";
 import type { LayersState } from "./MapView";
 
 const MapView = dynamic(() => import("./MapView"), {
@@ -57,6 +67,7 @@ export interface InitialData {
   activity: ActivityDTO[];
   stats: StatsDTO;
   settings: SettingsDTO;
+  preplans: PreplanDTO[];
 }
 
 async function jfetch<T>(url: string, init?: RequestInit): Promise<T> {
@@ -68,7 +79,7 @@ async function jfetch<T>(url: string, init?: RequestInit): Promise<T> {
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
-export default function CommandCenter({ initial }: { initial: InitialData }) {
+export default function CommandCenter({ initial, op }: { initial: InitialData; op: OperatorDTO }) {
   // ----- Datos -----
   const [incidents, setIncidents] = useState<IncidentDTO[]>(initial.incidents);
   const [units, setUnits] = useState<UnitDTO[]>(initial.units);
@@ -76,6 +87,7 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
   const [activity, setActivity] = useState<ActivityDTO[]>(initial.activity);
   const [stats, setStats] = useState<StatsDTO>(initial.stats);
   const [settings, setSettings] = useState<SettingsDTO>(initial.settings);
+  const [preplans, setPreplans] = useState<PreplanDTO[]>(initial.preplans);
 
   // Los enlaces compartidos por WhatsApp (foto, mapa) usan la URL pública configurada.
   useEffect(() => {
@@ -92,6 +104,14 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
   const [tab, setTab] = useState<DetailTab>("detalle");
   const [view, setView] = useState<"queue" | "map" | "detail">("map");
   const [lastNewId, setLastNewId] = useState<number | null>(null);
+  // Unidad seguida por la cámara del mapa (null = cámara libre). La tablet ya
+  // hacía esto en modo navegación; aquí la central puede seguir el desplazamiento.
+  const [followUnitId, setFollowUnitId] = useState<number | null>(null);
+  // Recorrido GPS grabado dibujado en el mapa (toggle desde el popup de unidad)
+  const [track, setTrack] = useState<{ unitId: number; data: TrackDTO } | null>(null);
+  // Chat abierto con una unidad (panel sobre el mapa) + último evento vivo
+  const [chatUnitId, setChatUnitId] = useState<number | null>(null);
+  const [lastChat, setLastChat] = useState<{ unitId: number; msg: ChatDTO } | null>(null);
 
   // ----- Tiempo real / tema / capas -----
   const [live, setLive] = useState(false);
@@ -103,6 +123,7 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
     units: true,
     hydrants: true,
     risks: true,
+    preplans: true,
     traffic: true,
     quakes: true,
     radius: true,
@@ -119,8 +140,16 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
   const [dispatchFor, setDispatchFor] = useState<IncidentDTO | null>(null);
   const [dispatchBusy, setDispatchBusy] = useState(false);
   const [simBusy, setSimBusy] = useState(false);
-  const [pickFor, setPickFor] = useState<null | "incident" | "incident-edit" | "hydrant" | "unit">(null);
+  const [pickFor, setPickFor] = useState<null | "incident" | "incident-edit" | "hydrant" | "unit" | "preplan">(null);
   const [hydrantOpen, setHydrantOpen] = useState(false);
+  // Preplans: directorio, ficha abierta, borrador (lat/lng compartidos con el pick del mapa)
+  const [preplansOpen, setPreplansOpen] = useState(false);
+  const [preplanView, setPreplanView] = useState<PreplanDTO | null>(null);
+  const [preplanDraft, setPreplanDraft] = useState<PreplanDraft>(EMPTY_PREPLAN_DRAFT);
+  const [preplanBusy, setPreplanBusy] = useState(false);
+  const [usersOpen, setUsersOpen] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [miClaveOpen, setMiClaveOpen] = useState(false);
   // Ruta vial trazada en el mapa (botón «Ruta» del detalle)
   const [route, setRoute] = useState<{ incidentId: number; data: RouteDTO } | null>(null);
   const [hydrantDraft, setHydrantDraft] = useState<HydrantDraft>(EMPTY_HYDRANT_DRAFT);
@@ -144,22 +173,53 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
   // ----- Carga de datos -----
   const refresh = useCallback(async () => {
     try {
-      const [inc, un, hy, st, act] = await Promise.all([
+      const [inc, un, hy, st, act, pp] = await Promise.all([
         jfetch<{ incidents: IncidentDTO[] }>("/api/incidents"),
         jfetch<{ units: UnitDTO[] }>("/api/units"),
         jfetch<{ hydrants: HydrantDTO[] }>("/api/hydrants"),
         jfetch<{ stats: StatsDTO }>("/api/stats"),
         jfetch<{ activity: ActivityDTO[] }>("/api/activity?limit=40"),
+        jfetch<{ preplans: PreplanDTO[] }>("/api/preplans"),
       ]);
       setIncidents(inc.incidents);
       setUnits(un.units);
       setHydrants(hy.hydrants);
       setStats(st.stats);
       setActivity(act.activity);
+      setPreplans(pp.preplans);
     } catch {
       /* SSE reintentará */
     }
   }, []);
+
+  // Refetch completo coalescido: en picos de SSE (varias unidades moviéndose,
+  // despachos en cadena) NO se apilan refetchs paralelos — si ya hay un
+  // refetch en marcha se marca «pendiente» y se ejecuta UNO al terminar.
+  const refreshBusyRef = useRef(false);
+  const refreshQueuedRef = useRef(false);
+  const scheduleRefresh = useCallback(async () => {
+    if (refreshBusyRef.current) {
+      refreshQueuedRef.current = true;
+      return;
+    }
+    refreshBusyRef.current = true;
+    try {
+      await refresh();
+    } finally {
+      refreshBusyRef.current = false;
+      if (refreshQueuedRef.current) {
+        refreshQueuedRef.current = false;
+        void scheduleRefresh();
+      }
+    }
+  }, [refresh]);
+
+  // Ids de unidades conocidas: decide si un evento «unit» se puede aplicar
+  // como parche o necesita un refetch (unidad creada hace poco).
+  const unitsIdsRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    unitsIdsRef.current = new Set(units.map((u) => u.id));
+  }, [units]);
 
   const loadDetail = useCallback(async (id: number) => {
     setDetailBusy(true);
@@ -210,7 +270,35 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
           duration: 8000,
         });
       }
-      void refresh();
+      // El ping de GPS viaja con la instantánea: parche local en el estado,
+      // sin tocar la BD. Movimientos de una unidad no cambian incidentes,
+      // stats ni actividad — no hay que refrescar nada más.
+      if (ev.type === "unit" && ev.unit) {
+        const s = ev.unit;
+        if (!unitsIdsRef.current.has(s.id)) void scheduleRefresh();
+        setUnits((prev) => {
+          const i = prev.findIndex((u) => u.id === s.id);
+          if (i === -1) return prev;
+          const cur = prev[i];
+          if (cur.lat === s.lat && cur.lng === s.lng && cur.status === s.status) return prev;
+          const next = prev.slice();
+          next[i] = { ...cur, lat: s.lat, lng: s.lng, status: s.status };
+          return next;
+        });
+        return;
+      }
+      // Mensaje de chat: llega completo en el evento — el panel abierto lo
+      // pinta; los mensajes de la unidad avisan con toast aunque no esté abierto.
+      if (ev.type === "chat" && ev.chat) {
+        setLastChat({ unitId: ev.chat.unitId, msg: { id: ev.chat.id, from: ev.chat.from, body: ev.chat.body, at: ev.chat.at } });
+        if (ev.chat.from === "unidad") {
+          const u = units.find((x) => x.id === ev.chat!.unitId);
+          const clip = ev.chat.body.length > 80 ? `${ev.chat.body.slice(0, 80)}…` : ev.chat.body;
+          toast.info(`💬 ${u?.code ?? "Unidad"}: ${clip}`);
+        }
+        return;
+      }
+      void scheduleRefresh();
       if (ev.type === "incident" && ev.id != null && ev.id === selectedId) {
         void loadDetail(ev.id);
       }
@@ -479,17 +567,36 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
     }
   }
 
-  /** «Ruta»: traza (o quita) la ruta vial en el mapa, del punto de salida del
-   * despacho (o del cuartel) a la escena — sin abrir Google Maps. */
+  /** Origen de la ruta hacia la escena: la posición ACTUAL de la unidad
+   * despachada si ya se apartó del punto de salida (>60 m, GPS en vivo);
+   * si no, el punto de despacho fijado al despachar o el cuartel. */
+  function routeOrigin(incident: IncidentDTO): { lat: number; lng: number } {
+    const assignedIds = new Set(
+      incident.units?.map((a) => a.unitId) ?? (incident.unitId != null ? [incident.unitId] : []),
+    );
+    for (const u of units) {
+      if (!assignedIds.has(u.id) || u.lat == null || u.lng == null || u.status !== "en_ruta") continue;
+      const moved =
+        incident.departLat != null && incident.departLng != null
+          ? haversineM(incident.departLat, incident.departLng, u.lat, u.lng) > 60
+          : true; // sin punto de salida conocido, la posición viva es el mejor origen
+      if (moved) return { lat: u.lat, lng: u.lng };
+    }
+    if (incident.departLat != null && incident.departLng != null) {
+      return { lat: incident.departLat, lng: incident.departLng };
+    }
+    return FIREHOUSE;
+  }
+
+  /** «Ruta»: traza (o quita) la ruta vial en el mapa hacia la escena — sin
+   * abrir Google Maps. Sale de donde está la unidad ahora mismo (no de donde
+   * estaba cuando se despachó). */
   async function toggleRoute(incident: IncidentDTO) {
     if (route?.incidentId === incident.id) {
       setRoute(null);
       return;
     }
-    const from =
-      incident.departLat != null && incident.departLng != null
-        ? { lat: incident.departLat, lng: incident.departLng }
-        : FIREHOUSE;
+    const from = routeOrigin(incident);
     try {
       const d = await jfetch<{ route: RouteDTO }>(
         `/api/route?from=${from.lat},${from.lng}&to=${incident.lat},${incident.lng}`,
@@ -500,6 +607,28 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
           ? `Ruta estimada en línea recta: ${fmtDistance(d.route.meters)} (OSRM no respondió)`
           : `Ruta vial trazada: ${fmtDistance(d.route.meters)} · ~${Math.max(1, Math.round(d.route.seconds / 60))} min`,
       );
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  /** «Ver recorrido»: dibuja el historial GPS grabado de la unidad (misiones
+   * de las últimas 12 h) sobre el mapa — para reconstruir lo hecho.*/
+  async function toggleTrack(unit: UnitDTO) {
+    if (track?.unitId === unit.id) {
+      setTrack(null);
+      return;
+    }
+    try {
+      const d = await jfetch<{ track: TrackDTO | null }>(`/api/units/${unit.id}/track`);
+      const t = d.track;
+      if (!t || t.count < 2) {
+        toast.info("Aún no hay recorrido grabado para esta unidad (se graba durante las misiones).");
+        setTrack(null);
+        return;
+      }
+      setTrack({ unitId: unit.id, data: t });
+      toast.info(`Recorrido: ${fmtDistance(t.meters)} · ${t.count} puntos GPS`);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -527,6 +656,10 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
       setUnitOpen(true);
     } else if (pickFor === "hydrant") {
       setHydrantDraft((d) => ({ ...d, lat: lat.toFixed(5), lng: lng.toFixed(5) }));
+    } else if (pickFor === "preplan") {
+      setPreplanDraft((d) => ({ ...d, lat: lat.toFixed(5), lng: lng.toFixed(5) }));
+      toast.info("Ubicación del preplan fijada en el mapa");
+      return; // sigue activo para afinar con más clics
     } else if (pickFor === "incident-edit") {
       setEditDraft((d) => ({ ...d, lat: lat.toFixed(5), lng: lng.toFixed(5) }));
     } else {
@@ -551,7 +684,86 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
     setPickFor(null);
     if (target === "unit") setUnitOpen(true);
     else if (target === "incident") setNewOpen(true);
-    // "hydrant" e "incident-edit": solo desactiva el clic en el mapa; la ventana sigue abierta
+    // "hydrant", "preplan" e "incident-edit": solo desactiva el clic en el mapa; la ventana sigue abierta
+  }
+
+  function startPickPreplan() {
+    // Igual que los hidrantes: el formulario queda abierto y el mapa clicable
+    setPickFor("preplan");
+  }
+
+  // ----- Preplans: alta/edición/borrado -----
+
+  async function savePreplan() {
+    setPreplanBusy(true);
+    try {
+      const lat = Number(preplanDraft.lat);
+      const lng = Number(preplanDraft.lng);
+      if (!preplanDraft.title.trim() || !preplanDraft.address.trim() || Number.isNaN(lat) || Number.isNaN(lng)) {
+        throw new Error("Completa título, dirección y ubicación (usa el botón «Mapa»)");
+      }
+      const body = {
+        title: preplanDraft.title.trim(),
+        address: preplanDraft.address.trim(),
+        lat,
+        lng,
+        layout: preplanDraft.layout.trim() || null,
+        hazards: preplanDraft.hazards.trim() || null,
+        keysInfo: preplanDraft.keysInfo.trim() || null,
+        waterSources: preplanDraft.waterSources.trim() || null,
+        contactName: preplanDraft.contactName.trim() || null,
+        contactPhone: preplanDraft.contactPhone.trim() || null,
+        notes: preplanDraft.notes.trim() || null,
+        photos: preplanDraft.photos
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        status: preplanDraft.status,
+      };
+      if (preplanDraft.id == null) {
+        const d = await jfetch<{ preplan: PreplanDTO }>("/api/preplans", {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify(body),
+        });
+        toast.success(`Ficha «${d.preplan.title}» creada`);
+      } else {
+        const d = await jfetch<{ preplan: PreplanDTO }>(`/api/preplans/${preplanDraft.id}`, {
+          method: "PATCH",
+          headers: JSON_HEADERS,
+          body: JSON.stringify(body),
+        });
+        toast.success(`Ficha «${d.preplan.title}» actualizada`);
+      }
+      setPreplansOpen(false);
+      setPickFor((p) => (p === "preplan" ? null : p));
+      setPreplanDraft(EMPTY_PREPLAN_DRAFT);
+      void refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setPreplanBusy(false);
+    }
+  }
+
+  async function deletePreplan(id: number) {
+    try {
+      await jfetch<{ ok: boolean }>(`/api/preplans/${id}`, { method: "DELETE" });
+      toast.success("Ficha eliminada");
+      void refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+      throw e;
+    }
+  }
+
+  async function operatorLogout() {
+    try {
+      await jfetch("/api/operator/logout", { method: "POST" });
+    } catch {
+      /* aunque falle, la pantalla de login aparece tras recargar */
+    }
+    window.location.reload();
   }
 
   function openNewHydrant() {
@@ -578,9 +790,7 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
           photoBase64: hydrantDraft.photo || null,
         }),
       });
-      toast.success(
-        `Hidrante ${d.hydrant.code ?? "sin código"} registrado · ${HYDRANT_SITUATION_META[d.hydrant.situation].label}`,
-      );
+      toast.success(`${hydrantLabel(d.hydrant.code)} registrado · ${HYDRANT_SITUATION_META[d.hydrant.situation].label}`);
       setHydrantOpen(false);
       setPickFor((p) => (p === "hydrant" ? null : p));
       setHydrantDraft(EMPTY_HYDRANT_DRAFT);
@@ -659,6 +869,15 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
   }
 
   // ----- Render -----
+  // Auto-ficha: preplan activo a <300 m de la escena seleccionada (First Due).
+  const preplanNear = useMemo(
+    () =>
+      selectedIncident
+        ? nearestPreplan(selectedIncident.lat, selectedIncident.lng, preplans, 300)
+        : null,
+    [selectedIncident, preplans],
+  );
+
   return (
     <div className="flex h-dvh flex-col">
       <TopBar
@@ -666,6 +885,7 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
         soundOn={soundOn}
         simBusy={simBusy}
         theme={theme}
+        op={op}
         onToggleTheme={toggleTheme}
         onToggleSound={() => {
           const next = !soundOn;
@@ -680,6 +900,11 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
         }}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHydrants={() => setHydrantsOpen(true)}
+        onOpenPreplans={() => setPreplansOpen(true)}
+        onOpenUsers={() => setUsersOpen(true)}
+        onOpenAudit={() => setAuditOpen(true)}
+        onOpenMiClave={() => setMiClaveOpen(true)}
+        onLogout={() => void operatorLogout()}
       />
       <StatsStrip stats={stats} live={live} />
 
@@ -700,11 +925,18 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
             units={units}
             hydrants={hydrants}
             risks={initial.risks}
+            preplans={preplans}
             selectedId={selectedId}
             nearHydrants={nearHydrants}
             layers={layers}
             theme={theme}
             picking={pickFor !== null}
+            followUnitId={followUnitId}
+            onFollowUnit={setFollowUnitId}
+            track={track}
+            onTrack={toggleTrack}
+            onChat={(u) => setChatUnitId(u.id)}
+            onPreplanView={(p) => setPreplanView(p)}
             onToggleLayer={(key) => setLayers((l) => ({ ...l, [key]: !l[key] }))}
             onSelect={(id) => select(id)}
             onPick={handlePick}
@@ -712,6 +944,16 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
             onNewHydrant={openNewHydrant}
             onHydrantSituation={setHydrantSituation}
           />
+          {/* Chat con una unidad (panel sobre el mapa; key fuerza remonto por unidad) */}
+          {chatUnitId != null && (
+            <ChatPanel
+              key={chatUnitId}
+              unitId={chatUnitId}
+              unitCode={units.find((u) => u.id === chatUnitId)?.code ?? "Unidad"}
+              incoming={lastChat}
+              onClose={() => setChatUnitId(null)}
+            />
+          )}
         </section>
 
         <aside className={cx("min-h-0 border-l border-line", view !== "detail" && "max-lg:hidden")}>
@@ -739,6 +981,7 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
             onSetCrew={setUnitCrew}
             routeForId={route?.incidentId ?? null}
             onRoute={toggleRoute}
+            preplanNear={preplanNear}
           />
         </aside>
       </main>
@@ -847,6 +1090,29 @@ export default function CommandCenter({ initial }: { initial: InitialData }) {
       {settingsOpen && (
         <SettingsDialog settings={settings} onSave={saveSettings} onClose={() => setSettingsOpen(false)} />
       )}
+      {preplansOpen && (
+        <PreplansDialog
+          preplans={preplans}
+          role={op.role}
+          draft={preplanDraft}
+          setDraft={setPreplanDraft}
+          busy={preplanBusy}
+          onClose={() => {
+            setPreplansOpen(false);
+            setPickFor((p) => (p === "preplan" ? null : p));
+          }}
+          onSave={savePreplan}
+          onDelete={(id) => void deletePreplan(id)}
+          onStartPick={startPickPreplan}
+          onView={(p) => setPreplanView(p)}
+        />
+      )}
+      {preplanView && (
+        <PreplanViewDialog preplan={preplanView} onClose={() => setPreplanView(null)} />
+      )}
+      {usersOpen && op.role === "jefe" && <UsersDialog onClose={() => setUsersOpen(false)} />}
+      {auditOpen && op.role === "jefe" && <AuditDialog onClose={() => setAuditOpen(false)} />}
+      {miClaveOpen && <MiClaveDialog onClose={() => setMiClaveOpen(false)} />}
     </div>
   );
 }

@@ -4,6 +4,8 @@
 
 import { connection } from "next/server";
 import { ApiError, jsonError } from "@/lib/errors";
+import { logAudit } from "@/lib/audit";
+import { operatorActor, requireOperator } from "@/lib/opauth";
 import { saveDataUrl } from "@/lib/media";
 import { runIdempotent } from "@/lib/idem";
 import { createHydrant, listHydrants } from "@/lib/queries";
@@ -20,6 +22,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const op = await requireOperator(request, ["jefe", "operador"]);
     const body = await request.json().catch(() => ({}));
     const parsed = hydrantNewSchema.safeParse(body);
     if (!parsed.success) {
@@ -39,6 +42,10 @@ export async function POST(request: Request) {
         photoUrl,
       });
       return { hydrant };
+    });
+    logAudit(operatorActor(op), "hydrant_create", {
+      hydrantId: result.hydrant.id,
+      code: result.hydrant.code,
     });
     return Response.json(result, { status: 201 });
   } catch (e) {

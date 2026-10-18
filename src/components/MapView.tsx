@@ -8,22 +8,31 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import * as maplibregl from "maplibre-gl";
 import type * as GeoJSON from "geojson";
 import {
+  Ambulance,
+  Buildings,
+  ChatCircle,
   Crosshair,
   Drop,
+  Flag,
+  Lifebuoy,
   Plus,
+  Ruler,
   Square,
   StackSimple,
   TextAa,
   TrafficSignal,
   Triangle,
+  Truck,
+  Warning,
   X,
 } from "@phosphor-icons/react";
-import { CITY_CENTER, circleRing, OFM_STYLES, type HydrantNear } from "@/lib/geo";
+import { CITY_CENTER, circleRing, haversineM, OFM_STYLES, type HydrantNear } from "@/lib/geo";
 import { HYDRANT_SITUATION_META, STATUS_META, UNIT_STATUS_META, UNIT_TYPE_META } from "@/lib/meta";
+import IncidentIcon from "./IncidentIcon";
 import { EMPTY_QUAKES, placeEs, quakeColor, quakeRadius, type QuakesFeed } from "@/lib/quakes";
 import { TRAFFIC_COLORS, TRAFFIC_LABEL, ALERT_META, type TrafficFeed } from "@/lib/traffic";
-import type { HydrantDTO, HydrantSituation, IncidentDTO, RiskDTO, RouteDTO, UnitDTO } from "@/lib/types";
-import { cx, displayCode, timeAgo } from "@/lib/utils";
+import type { HydrantDTO, HydrantSituation, IncidentDTO, PreplanDTO, RiskDTO, RouteDTO, TrackDTO, UnitDTO, UnitType } from "@/lib/types";
+import { cx, displayCode, fmtDistance, hydrantLabel, timeAgo } from "@/lib/utils";
 import {
   Map,
   MapControls,
@@ -43,6 +52,7 @@ export interface LayersState {
   units: boolean;
   hydrants: boolean;
   risks: boolean;
+  preplans: boolean;
   traffic: boolean;
   quakes: boolean;
   radius: boolean;
@@ -75,7 +85,12 @@ const EMPTY_FEED: TrafficFeed = { source: "none", fetchedAt: "", segments: [], a
 
 // ------------------------------------------------------------------
 // Iconos tácticos (mismas clases .mk que antes; ahora como React)
+// Cada pin se lee de un vistazo: tipo de emergencia, recurso y estado.
+// El icono por TIPO de incidente vive en IncidentIcon (compartido con
+// la cola y el detalle).
 // ------------------------------------------------------------------
+
+type IconCmp = React.ComponentType<{ size?: number; weight?: "fill" | "regular" | "bold"; color?: string; className?: string }>;
 
 function IncidentDot({ incident: i, selected }: { incident: IncidentDTO; selected: boolean }) {
   const color = STATUS_COLOR[i.status] ?? "#ff4a38";
@@ -85,8 +100,8 @@ function IncidentDot({ incident: i, selected }: { incident: IncidentDTO; selecte
       {pulse && (
         <div className="ring" style={{ background: `color-mix(in srgb, ${color} 40%, transparent)` }} />
       )}
-      <div className="dot" style={{ background: color }}>
-        🔥
+      <div className="dot" style={{ background: color }} title={i.title}>
+        <IncidentIcon title={i.title} size={14} />
       </div>
     </div>
   );
@@ -96,24 +111,57 @@ function HydrantDot({ near, situation }: { near: boolean; situation: HydrantSitu
   return (
     <div className={cx("mk mk-hydrant", near && "near")}>
       <div className="dot" style={{ background: HYDRANT_COLOR[situation] ?? "var(--blue)" }}>
-        H
+        <Drop size={10} weight="fill" />
       </div>
     </div>
   );
 }
 
-function RiskDot() {
+/** Punto de riesgo: triángulo de alerta con color por nivel */
+const RISK_LEVEL_COLOR: Record<string, { bg: string; fg: string }> = {
+  alto: { bg: "var(--red)", fg: "#fff" },
+  medio: { bg: "var(--amber)", fg: "#201400" },
+  bajo: { bg: "var(--mu-2)", fg: "#fff" },
+};
+
+function RiskDot({ level }: { level: string }) {
+  const c = RISK_LEVEL_COLOR[level] ?? RISK_LEVEL_COLOR.medio;
   return (
     <div className="mk mk-risk">
-      <div className="dot">!</div>
+      <div className="dot" style={{ background: c.bg, color: c.fg }}>
+        <Warning size={11} weight="fill" />
+      </div>
     </div>
   );
 }
 
+/** Pin de preplan: ficha operativa de un edificio de riesgo */
+function PreplanDot() {
+  return (
+    <div className="mk mk-risk">
+      <div className="dot" style={{ background: "var(--amber)" }}>
+        <Buildings size={11} weight="fill" />
+      </div>
+    </div>
+  );
+}
+
+/** Unidad: icono por TIPO de vehículo + código, borde/icono por estado */
+const UNIT_TYPE_ICON: Record<UnitType, IconCmp> = {
+  bomba: Truck,
+  cisterna: Truck,
+  rescate: Lifebuoy,
+  ambulancia: Ambulance,
+  mando: Flag,
+};
+
 function UnitDot({ unit: u }: { unit: UnitDTO }) {
+  const TypeIcon = UNIT_TYPE_ICON[u.type] ?? Truck;
+  const statusColor = UNIT_COLOR[u.status] ?? "#fff";
   return (
     <div className="mk mk-unit">
-      <div className="dot" style={{ borderColor: UNIT_COLOR[u.status] ?? "#fff" }}>
+      <div className="dot" style={{ borderColor: statusColor }}>
+        <TypeIcon size={11} weight="fill" color={statusColor} />
         <span>{u.code}</span>
       </div>
     </div>
@@ -163,11 +211,16 @@ function MapEngine({
   selected,
   picking,
   onPick,
+  measuring,
+  onMeasurePoint,
   mapRef,
 }: {
   selected: IncidentDTO | null;
   picking: boolean;
   onPick: (lat: number, lng: number) => void;
+  /** Regla de medición activa: los clics del mapa añaden vértices */
+  measuring: boolean;
+  onMeasurePoint: (lat: number, lng: number) => void;
   mapRef: React.RefObject<maplibregl.Map | null>;
 }) {
   const { map, isLoaded } = useMap();
@@ -192,12 +245,13 @@ function MapEngine({
     if (!map) return;
     const handler = (e: maplibregl.MapMouseEvent) => {
       if (picking) onPick(e.lngLat.lat, e.lngLat.lng);
+      else if (measuring) onMeasurePoint(e.lngLat.lat, e.lngLat.lng);
     };
     map.on("click", handler);
     return () => {
       map.off("click", handler);
     };
-  }, [map, picking, onPick]);
+  }, [map, picking, onPick, measuring, onMeasurePoint]);
 
   useEffect(() => {
     if (!map || !isLoaded || !selected) return;
@@ -205,6 +259,39 @@ function MapEngine({
     if (prefersReducedMotion()) map.jumpTo({ center: [selected.lng, selected.lat], zoom });
     else map.flyTo({ center: [selected.lng, selected.lat], zoom, duration: 700 });
   }, [map, isLoaded, selected]);
+
+  return null;
+}
+
+/** Mantiene la cámara centrada sobre una unidad mientras se desplaza.
+ *  El operador puede desactivarlo arrastrando el mapa o con el botón «✕». */
+function FollowUnit({
+  unitId,
+  units,
+  onStop,
+}: {
+  unitId: number;
+  units: UnitDTO[];
+  onStop: () => void;
+}) {
+  const { map, isLoaded } = useMap();
+  const unit = useMemo(() => units.find((u) => u.id === unitId) ?? null, [units, unitId]);
+
+  // Cancelar el seguimiento si el operador toma el control (arrastre).
+  useEffect(() => {
+    if (!map || !isLoaded) return;
+    map.on("dragstart", onStop);
+    return () => {
+      map.off("dragstart", onStop);
+    };
+  }, [map, isLoaded, onStop]);
+
+  // Recentrar en cada posición nueva de la unidad seguida.
+  useEffect(() => {
+    if (!map || !isLoaded || !unit || unit.lat == null || unit.lng == null) return;
+    if (prefersReducedMotion()) map.jumpTo({ center: [unit.lng, unit.lat] });
+    else map.easeTo({ center: [unit.lng, unit.lat], duration: 1200 });
+  }, [map, isLoaded, unit]);
 
   return null;
 }
@@ -283,7 +370,7 @@ function HydrantPopup({
     <div className="min-w-[212px]">
       <div className="display flex items-center gap-1.5 text-[13.5px] font-bold">
         <Drop size={13} weight="fill" className="text-blue" aria-hidden="true" />
-        {hydrant.code ?? "Hidrante sin código"}
+        {hydrant.code ? hydrantLabel(hydrant.code) : "Hidrante sin código"}
       </div>
       <div className="mt-0.5 text-[11px] text-mu">
         Presión {hydrant.pressure ?? "s/d"} · {hydrant.diameter ?? "—"} mm
@@ -361,6 +448,8 @@ interface Props {
   units: UnitDTO[];
   hydrants: HydrantDTO[];
   risks: RiskDTO[];
+  /** Fichas operativas de riesgo (preplans) */
+  preplans: PreplanDTO[];
   selectedId: number | null;
   nearHydrants: HydrantNear[];
   layers: LayersState;
@@ -368,6 +457,15 @@ interface Props {
   picking: boolean;
   /** Ruta vial trazada desde el detalle (null = sin ruta) */
   route: RouteDTO | null;
+  /** Recorrido GPS grabado dibujado en el mapa (null = sin recorrido) */
+  track: { unitId: number; data: TrackDTO } | null;
+  onTrack: (u: UnitDTO) => void;
+  onChat: (u: UnitDTO) => void;
+  /** Abrir la ficha completa de un preplan */
+  onPreplanView: (p: PreplanDTO) => void;
+  /** Unidad seguida por la cámara (null = cámara libre) */
+  followUnitId: number | null;
+  onFollowUnit: (id: number | null) => void;
   onToggleLayer: (key: keyof LayersState) => void;
   onSelect: (id: number) => void;
   onPick: (lat: number, lng: number) => void;
@@ -382,6 +480,7 @@ type PopupState =
   | { kind: "incident"; id: number }
   | { kind: "unit"; id: number }
   | { kind: "hydrant"; id: number }
+  | { kind: "preplan"; id: number }
   | { kind: "alert"; id: string };
 
 export default function MapView({
@@ -389,12 +488,19 @@ export default function MapView({
   units,
   hydrants,
   risks,
+  preplans,
   selectedId,
   nearHydrants,
   layers,
   theme,
   picking,
   route,
+  track,
+  onTrack,
+  onChat,
+  onPreplanView,
+  followUnitId,
+  onFollowUnit,
   onToggleLayer,
   onSelect,
   onPick,
@@ -409,8 +515,52 @@ export default function MapView({
   const [quakes, setQuakes] = useState<QuakesFeed | null>(null);
   const [popup, setPopup] = useState<PopupState>(null);
   const [hoverTip, setHoverTip] = useState<{ lng: number; lat: number; label: string } | null>(null);
+
+  // ---- Regla de medición (First Due: distancias de tramos, p. ej. mangueras) ----
+  // Vértices en orden GeoJSON [lng, lat]; null = herramienta apagada
+  const [measure, setMeasure] = useState<[number, number][] | null>(null);
+  const measuring = measure !== null;
+
+  // Esc termina la medición
+  useEffect(() => {
+    if (!measuring) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMeasure(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [measuring]);
+
+  const addMeasurePoint = useCallback((lat: number, lng: number) => {
+    setMeasure((prev) => (prev ? [...prev, [lng, lat]] : [[lng, lat] as [number, number]]));
+  }, []);
+
+  const measureTotal = useMemo(() => {
+    if (!measure || measure.length < 2) return 0;
+    let total = 0;
+    for (let i = 1; i < measure.length; i++) {
+      total += haversineM(measure[i - 1][1], measure[i - 1][0], measure[i][1], measure[i][0]);
+    }
+    return total;
+  }, [measure]);
+
+  const measureLineGeo = useMemo<GeoJSON.Feature<GeoJSON.LineString> | null>(
+    () =>
+      measure && measure.length >= 2
+        ? {
+            type: "Feature",
+            properties: {},
+            geometry: { type: "LineString", coordinates: measure },
+          }
+        : null,
+    [measure],
+  );
   const selected = useMemo(() => incidents.find((i) => i.id === selectedId) ?? null, [incidents, selectedId]);
   const nearIds = useMemo(() => new Set(nearHydrants.map((h) => h.hydrant.id)), [nearHydrants]);
+  const followUnit = useMemo(
+    () => (followUnitId != null ? (units.find((u) => u.id === followUnitId) ?? null) : null),
+    [units, followUnitId],
+  );
 
   // Tráfico y zonas problemáticas: consulta /api/traffic (Waze en vivo; si la
   // red lo bloquea no hay datos y se ofrece el visor embebido de Waze) cada 3 min.
@@ -522,6 +672,7 @@ export default function MapView({
     popup?.kind === "hydrant" && layers.hydrants
       ? hydrants.find((h) => h.id === popup.id) ?? null
       : null;
+  const popupPreplan = popup?.kind === "preplan" ? preplans.find((p) => p.id === popup.id) ?? null : null;
   const popupAlert =
     popup?.kind === "alert" && layers.traffic
       ? trafficFeed.alerts.find((a) => a.id === popup.id) ?? null
@@ -537,7 +688,14 @@ export default function MapView({
         theme={theme}
         styles={OFM_STYLES}
       >
-        <MapEngine selected={selected} picking={picking} onPick={onPick} mapRef={mapRef} />
+        <MapEngine
+          selected={selected}
+          picking={picking}
+          onPick={onPick}
+          measuring={measuring}
+          onMeasurePoint={addMeasurePoint}
+          mapRef={mapRef}
+        />
         <MapControls position="top-right" />
 
         {/* Radio de 300 m del incidente seleccionado + líneas a sus hidrantes */}
@@ -602,6 +760,50 @@ export default function MapView({
           />
         )}
 
+        {/* Recorrido GPS grabado de una unidad (botón «Ver recorrido») */}
+        {track && track.data.points.length >= 2 && (
+          <MapGeoJSON
+            id="fw-track"
+            data={{
+              type: "Feature",
+              properties: {},
+              geometry: { type: "LineString", coordinates: track.data.points },
+            }}
+            fillPaint={false}
+            linePaint={{ "line-color": "#a78bfa", "line-width": 2.5, "line-opacity": 0.85 }}
+          />
+        )}
+
+        {/* Regla de medición: polilínea de tramos */}
+        {measureLineGeo && (
+          <MapGeoJSON
+            id="fw-measure"
+            data={measureLineGeo}
+            fillPaint={false}
+            linePaint={{ "line-color": "#ff6ec7", "line-width": 3, "line-opacity": 0.9, "line-dasharray": [1, 1] }}
+          />
+        )}
+
+        {/* Regla de medición: vértices (clic en uno lo quita) */}
+        {(measure ?? []).map(([lng, lat], i) => (
+          <MapMarker
+            key={`mv-${i}`}
+            longitude={lng}
+            latitude={lat}
+            onClick={() => setMeasure((prev) => (prev ? prev.filter((_, j) => j !== i) : prev))}
+          >
+            <MarkerContent>
+              <span
+                className="inline-block h-3 w-3 rounded-full border-[3px] border-white bg-amber shadow"
+                title={`Vértice ${i + 1} — clic para quitar`}
+              />
+            </MarkerContent>
+            <MarkerTooltip className="border border-line2 bg-panel! text-tx!">
+              Vértice {i + 1} · clic para quitar
+            </MarkerTooltip>
+          </MapMarker>
+        ))}
+
         {/* Terremotos recientes (USGS) */}
         {layers.quakes &&
           quakesFeed.quakes.map((q) => (
@@ -621,13 +823,34 @@ export default function MapView({
           risks.map((r) => (
             <MapMarker key={`r-${r.id}`} longitude={r.lng} latitude={r.lat}>
               <MarkerContent>
-                <RiskDot />
+                <RiskDot level={r.level} />
               </MarkerContent>
               <MarkerTooltip className="border border-line2 bg-panel! text-tx!">
                 {r.name} · {r.type} · riesgo {r.level}
               </MarkerTooltip>
             </MapMarker>
           ))}
+
+        {/* Preplans: fichas operativas de edificios de riesgo */}
+        {layers.preplans &&
+          preplans
+            .filter((p) => p.status === "activo")
+            .map((p) => (
+              <MapMarker
+                key={`pp-${p.id}`}
+                longitude={p.lng}
+                latitude={p.lat}
+                onClick={() => setPopup({ kind: "preplan", id: p.id })}
+              >
+                <MarkerContent>
+                  <PreplanDot />
+                </MarkerContent>
+                <MarkerTooltip className="border border-line2 bg-panel! text-tx!">
+                  Preplan · {p.title}
+                  {p.hazards ? ` · ${p.hazards.slice(0, 40)}` : ""}
+                </MarkerTooltip>
+              </MapMarker>
+            ))}
 
         {/* Hidrantes */}
         {layers.hydrants &&
@@ -642,12 +865,12 @@ export default function MapView({
                 <HydrantDot near={nearIds.has(h.id)} situation={h.situation} />
               </MarkerContent>
               <MarkerTooltip className="border border-line2 bg-panel! text-tx!">
-                {h.code ?? "Hidrante"}
+                {hydrantLabel(h.code)}
               </MarkerTooltip>
             </MapMarker>
           ))}
 
-        {/* Unidades */}
+        {/* Unidades (GPS en vivo: el marcador se interpola suavemente) */}
         {layers.units &&
           units
             .filter((u) => u.lat != null && u.lng != null)
@@ -656,6 +879,7 @@ export default function MapView({
                 key={`u-${u.id}`}
                 longitude={u.lng as number}
                 latitude={u.lat as number}
+                smooth
                 onClick={() => setPopup({ kind: "unit", id: u.id })}
               >
                 <MarkerContent>
@@ -694,6 +918,9 @@ export default function MapView({
               </MapMarker>
             );
           })}
+
+        {/* Seguimiento de unidad (la cámara la sigue mientras se desplaza) */}
+        {followUnitId != null && <FollowUnit unitId={followUnitId} units={units} onStop={() => onFollowUnit(null)} />}
 
         {/* Popups (uno a la vez) */}
         {popupIncident && (
@@ -760,6 +987,66 @@ export default function MapView({
                   Ver incidente asignado
                 </button>
               )}
+              <button
+                className={cx("btn btn-sm mt-1 w-full", followUnitId === popupUnit.id && "border-amber/60 text-amber")}
+                onClick={() => onFollowUnit(followUnitId === popupUnit.id ? null : popupUnit.id)}
+              >
+                {followUnitId === popupUnit.id ? "Dejar de seguir" : "Seguir en el mapa"}
+              </button>
+              <button
+                className={cx("btn btn-sm mt-1 w-full", track?.unitId === popupUnit.id && "border-amber/60 text-amber")}
+                onClick={() => onTrack(popupUnit)}
+                title="Dibuja el historial GPS grabado de esta unidad (se graba durante las misiones)"
+              >
+                {track?.unitId === popupUnit.id ? "Quitar recorrido" : "Ver recorrido (GPS)"}
+              </button>
+              <button
+                className="btn btn-sm mt-1 w-full"
+                onClick={() => {
+                  onChat(popupUnit);
+                  setPopup(null);
+                }}
+                title="Abrir el chat con la tablet de la unidad"
+              >
+                <ChatCircle size={13} aria-hidden="true" /> Mensaje a la unidad
+              </button>
+            </div>
+          </MapPopup>
+        )}
+        {popupPreplan && (
+          <MapPopup
+            longitude={popupPreplan.lng}
+            latitude={popupPreplan.lat}
+            closeButton
+            onClose={() => setPopup(null)}
+            className="border-line"
+          >
+            <div className="min-w-[200px]">
+              <div className="display text-[13.5px] leading-tight font-bold text-amber">
+                Preplan · {popupPreplan.title}
+              </div>
+              <div className="mt-0.5 text-[11px] text-mu">{popupPreplan.address}</div>
+              {popupPreplan.hazards && (
+                <div className="mt-1 text-[11.5px]">
+                  <span className="font-bold tracking-wider text-mu2 uppercase">Peligros: </span>
+                  {popupPreplan.hazards.slice(0, 90)}
+                </div>
+              )}
+              {popupPreplan.keysInfo && (
+                <div className="mt-0.5 text-[11.5px] text-mu">
+                  <span className="font-bold tracking-wider text-mu2 uppercase">Llaves: </span>
+                  {popupPreplan.keysInfo.slice(0, 80)}
+                </div>
+              )}
+              <button
+                className="btn btn-sm mt-2 w-full"
+                onClick={() => {
+                  onPreplanView(popupPreplan);
+                  setPopup(null);
+                }}
+              >
+                Ver ficha completa
+              </button>
             </div>
           </MapPopup>
         )}
@@ -801,6 +1088,41 @@ export default function MapView({
         )}
       </Map>
 
+      {/* Seguimiento activo de unidad */}
+      {followUnitId != null && followUnit && (
+        <div
+          className="absolute top-3 right-3 z-[950] flex items-center gap-2 rounded border border-amber/60 bg-panel px-2.5 py-1.5 shadow-lg"
+          role="status"
+        >
+          <Crosshair size={14} className="text-amber" aria-hidden="true" />
+          <span className="text-[12px] font-semibold">
+            Siguiendo {followUnit.code}
+            {followUnit.lat != null ? "" : " (sin ubicación)"}
+          </span>
+          <button className="btn btn-sm" onClick={() => onFollowUnit(null)} title="Dejar de seguir">
+            <X size={12} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
+      {/* Regla de medición activa: lectura en vivo */}
+      {measuring && (
+        <div
+          role="status"
+          className="absolute top-3 left-1/2 z-[950] flex -translate-x-1/2 items-center gap-3 rounded border border-amber/60 bg-panel px-3 py-2 shadow-lg"
+        >
+          <Ruler size={15} className="text-amber" aria-hidden="true" />
+          <span className="text-[12.5px] font-semibold">
+            {measure!.length < 2
+              ? "Clic en el mapa para añadir vértices (Esc termina)"
+              : `Total: ${fmtDistance(measureTotal)} · ${measure!.length - 1} tramo${measure!.length > 2 ? "s" : ""}`}
+          </span>
+          <button className="btn btn-sm" onClick={() => setMeasure(null)}>
+            <X size={12} aria-hidden="true" /> Terminar
+          </button>
+        </div>
+      )}
+
       {/* Aviso de modo "fijar ubicación" */}
       {picking && (
         <div
@@ -833,6 +1155,17 @@ export default function MapView({
             title="Registrar un hidrante en el mapa"
           >
             <Plus size={14} aria-hidden="true" /> Hidrante
+          </button>
+          <button
+            className={cx("btn btn-sm", measuring && "border-amber/60 text-amber")}
+            onClick={() => (measuring ? setMeasure(null) : setMeasure([]))}
+            title={
+              measuring
+                ? "Terminar la medición"
+                : "Medir distancias en el mapa: cada clic añade un vértice"
+            }
+          >
+            <Ruler size={14} aria-hidden="true" /> {measuring ? "Medir…" : "Medir"}
           </button>
         </div>
         {panelOpen && (
@@ -872,6 +1205,14 @@ export default function MapView({
                 checked={layers.risks}
                 onChange={() => onToggleLayer("risks")}
                 swatch={<Triangle size={10} weight="fill" className="text-amber" />}
+              />
+              <LayerToggle
+                label="Preplans (fichas de riesgo)"
+                checked={layers.preplans}
+                onChange={() => onToggleLayer("preplans")}
+                swatch={
+                  <span className="inline-block h-2 w-2 rounded-sm border border-amber bg-amber/40" />
+                }
               />
               <LayerToggle
                 label={`Tráfico y alertas · ${trafficFeed.source === "waze" ? "en vivo" : "sin datos"}`}

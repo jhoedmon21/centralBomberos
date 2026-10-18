@@ -2,7 +2,7 @@
 
 import type { HydrantNear } from "./geo";
 import type { IncidentDTO } from "./types";
-import { digitsOnly, fmtCoords, fmtDistance } from "./utils";
+import { digitsOnly, fmtCoords, fmtDistance, hydrantLabel } from "./utils";
 
 export function waLink(phone: string, text: string): string {
   return `https://wa.me/${digitsOnly(phone)}?text=${encodeURIComponent(text)}`;
@@ -69,7 +69,7 @@ export function dispatchMessage(
     lines.push("", "💧 *Hidrantes cercanos a la escena:*");
     hydrants.forEach((h, i) => {
       lines.push(
-        `${i + 1}. ${h.hydrant.code ?? "Hidrante"} — ${fmtDistance(h.meters)} (${h.hydrant.pressure ?? "s/d"})`,
+        `${i + 1}. ${hydrantLabel(h.hydrant.code)} — ${fmtDistance(h.meters)} (${h.hydrant.pressure ?? "s/d"})`,
       );
     });
   }

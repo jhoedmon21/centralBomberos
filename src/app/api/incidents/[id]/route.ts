@@ -3,6 +3,8 @@
 
 import { connection } from "next/server";
 import { jsonError } from "@/lib/errors";
+import { logAudit } from "@/lib/audit";
+import { operatorActor, requireOperator } from "@/lib/opauth";
 import { saveDataUrl } from "@/lib/media";
 import { getIncident, updateIncident } from "@/lib/queries";
 import type { IncidentStatus, Severity } from "@/lib/types";
@@ -19,6 +21,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/incidents/[id]"
 
 export async function PATCH(request: Request, ctx: RouteContext<"/api/incidents/[id]">) {
   try {
+    const op = await requireOperator(request, ["jefe", "operador"]);
     const { id } = await ctx.params;
     const raw = await request.json().catch(() => ({}));
     const body = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
@@ -42,8 +45,13 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/incidents/
         reporterPhone: "reporterPhone" in body ? (body.reporterPhone as string | null) : undefined,
         photoUrl,
       },
-      typeof body.actor === "string" ? body.actor : "operador",
+      op.name,
     );
+    logAudit(operatorActor(op), "incident_patch", {
+      incidentId: incident.id,
+      status: body.status,
+      severity: body.severity,
+    });
     return Response.json({ incident });
   } catch (e) {
     return jsonError(e);

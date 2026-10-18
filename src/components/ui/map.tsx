@@ -432,6 +432,12 @@ function useMarkerContext() {
   return context;
 }
 
+// Suavizado del desplazamiento del marcador (unidades en vivo):
+// SMOOTH_MS es comparable al ritmo de pings (UNIT_BROADCAST_MS en el servidor)
+// y SMOOTH_JUMP_DEG pone el tope para el salto inicial/teleport (~1.1 km).
+const SMOOTH_MS = 3_000;
+const SMOOTH_JUMP_DEG = 0.01;
+
 type MapMarkerProps = {
   /** Longitude coordinate for marker position */
   longitude: number;
@@ -451,6 +457,8 @@ type MapMarkerProps = {
   onDrag?: (lngLat: { lng: number; lat: number }) => void;
   /** Callback when marker drag ends (requires draggable: true) */
   onDragEnd?: (lngLat: { lng: number; lat: number }) => void;
+  /** Interpola el movimiento entre posiciones (para unidades GPS en vivo) */
+  smooth?: boolean;
 } & Omit<MarkerOptions, "element">;
 
 function MapMarker({
@@ -464,6 +472,7 @@ function MapMarker({
   onDrag,
   onDragEnd,
   draggable = false,
+  smooth = false,
   ...markerOptions
 }: MapMarkerProps) {
   const { map } = useMap();
@@ -484,6 +493,8 @@ function MapMarker({
     onDrag,
     onDragEnd,
   };
+
+  const draggingRef = useRef(false);
 
   const marker = useMemo(() => {
     const markerInstance = new MapLibreGL.Marker({
@@ -507,6 +518,7 @@ function MapMarker({
       ?.addEventListener("mouseleave", handleMouseLeave);
 
     const handleDragStart = () => {
+      draggingRef.current = true;
       const lngLat = markerInstance.getLngLat();
       callbacksRef.current.onDragStart?.({ lng: lngLat.lng, lat: lngLat.lat });
     };
@@ -515,6 +527,7 @@ function MapMarker({
       callbacksRef.current.onDrag?.({ lng: lngLat.lng, lat: lngLat.lat });
     };
     const handleDragEnd = () => {
+      draggingRef.current = false;
       const lngLat = markerInstance.getLngLat();
       callbacksRef.current.onDragEnd?.({ lng: lngLat.lng, lat: lngLat.lat });
     };
@@ -542,12 +555,57 @@ function MapMarker({
 
   const { offset, rotation, rotationAlignment, pitchAlignment } = markerOptions;
 
+  // Posición del marcador: con smooth=true (GPS en vivo) interpola linealmente
+  // entre la posición actual y la nueva — sin saltos. A velocidades urbanas el
+  // trayecto entre pings es corto y la recta es bastante fiel a la calle.
+  const animRef = useRef<number | null>(null);
+
+  const cancelAnim = useCallback(() => {
+    if (animRef.current != null) {
+      cancelAnimationFrame(animRef.current);
+      animRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => cancelAnim(), [cancelAnim]);
+
   useEffect(() => {
     const current = marker.getLngLat();
-    if (current.lng !== longitude || current.lat !== latitude) {
+    const dx = longitude - current.lng;
+    const dy = latitude - current.lat;
+    const dist = Math.hypot(dx, dy);
+
+    const canSmooth =
+      smooth &&
+      dist > 1e-7 &&
+      dist < SMOOTH_JUMP_DEG &&
+      !draggingRef.current &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (!canSmooth) {
+      cancelAnim();
       marker.setLngLat([longitude, latitude]);
+      return;
     }
 
+    const from = { lng: current.lng, lat: current.lat };
+    const t0 = performance.now();
+    cancelAnim();
+    const step = (now: number) => {
+      if (draggingRef.current) {
+        cancelAnim();
+        return;
+      }
+      const t = Math.min(1, (now - t0) / SMOOTH_MS);
+      // Interpolación lineal: velocidad constante, refuerza la sensación de
+      // desplazamiento real entre pings.
+      marker.setLngLat([from.lng + dx * t, from.lat + dy * t]);
+      animRef.current = t < 1 ? requestAnimationFrame(step) : null;
+    };
+    animRef.current = requestAnimationFrame(step);
+  }, [marker, longitude, latitude, smooth, cancelAnim]);
+
+  useEffect(() => {
     if (marker.isDraggable() !== draggable) {
       marker.setDraggable(draggable);
     }

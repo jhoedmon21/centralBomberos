@@ -10,11 +10,14 @@ Central de operaciones para bomberos: los ciudadanos reportan emergencias por **
 
 - **Recepción de reportes por WhatsApp** — texto, **ubicación en tiempo real** y **fotos**: los mensajes del mismo teléfono se unen al reporte abierto reciente (una foto o una ubicación suelta no crean otro incidente) y las imágenes se descargan con el token de Meta y quedan como **evidencia** del incidente. Modo demo integrado (`Simular reporte`) + webhook real listo para la WhatsApp Cloud API de Meta.
 - **Registro manual con búsqueda de dirección** — en *Nuevo reporte* escribe la dirección y pulsa **Buscar** (o Enter): la búsqueda de direcciones (OpenStreetMap · Nominatim, sin API key) devuelve coincidencias reales con sus coordenadas y, al elegir una, **fija la ubicación sola**; también puedes fijarla en el mapa o usar tu ubicación actual. El reporte se puede **editar después** (tipo, dirección, severidad, ubicación, notas y foto) y cada cambio queda registrado en la bitácora del incidente; al editar, la **ventana es arrastrable** y no bloquea el mapa: haz clic en una calle para corregir la ubicación sin cerrarla.
-- **Mapa real (MapLibre GL + mapcn)** — muestra **solo los incidentes en curso** (si seleccionas uno de la cola *Historial*/*Todos*, ese aparece también para ubicarlo): incidentes con **direcciones visibles** (capa *Direcciones*), unidades, hidrantes, puntos de riesgo (grifos, colegios, mercados), **tráfico y zonas problemáticas** (Waze en vivo, visor embebido sin key), **terremotos recientes** (USGS: M ≥ 2.5 · últimos 7 días · ≤ 700 km de Camaná) y radio de seguridad de 300 m con líneas a los 3 hidrantes más cercanos. **Registro de hidrantes** con ventana arrastrable (se ubica con clics en el mapa, sin cerrarla) y **foto de la boca**; **situación** por hidrante (operativo / en mantenimiento / fuera de servicio; el marcador cambia de color). **Mini-mapa de hidrantes** en el detalle del incidente (escena + radio de 300 m + líneas a los 3 más cercanos). Tiles vectoriales **sin API key** (OpenFreeMap, datos OpenStreetMap): estilo *dark* (tema oscuro) y *positron* (tema claro), con nombres de calles nítidos a cualquier nivel de zoom.
+- **Mapa real (MapLibre GL + mapcn)** — muestra **solo los incidentes en curso** (si seleccionas uno de la cola *Historial*/*Todos*, ese aparece también para ubicarlo): incidentes con **direcciones visibles** (capa *Direcciones*), unidades, hidrantes, puntos de riesgo (grifos, colegios, mercados), **tráfico y zonas problemáticas** (Waze en vivo, visor embebido sin key), **terremotos recientes** (USGS: M ≥ 2.5 · últimos 7 días · ≤ 700 km de Camaná) y radio de seguridad de 300 m con líneas a los 3 hidrantes más cercanos. **Registro de hidrantes** con ventana arrastrable (se ubica con clics en el mapa, sin cerrarla) y **foto de la boca**; **situación** por hidrante (operativo / en mantenimiento / fuera de servicio; el marcador cambia de color). **Mini-mapa de hidrantes** en el detalle del incidente (escena + radio de 300 m + líneas a los 3 más cercanos). Tiles vectoriales **sin API key** (OpenFreeMap, datos OpenStreetMap): estilo *dark* (tema oscuro) y *positron* (tema claro), con nombres de calles nítidos a cualquier nivel de zoom. Los **pines se leen de un vistazo**: cada incidente lleva el **icono de su tipo** (incendio 🔥, fuga de gas, rescate vehicular, emergencia médica, derrumbe, eléctrico, inundación, árbol caído, rescate de personas… con sirena genérica si no calza) y color por estado (anillo de pulso mientras nadie atiende); los hidrantes, una gota con color de situación; los puntos de riesgo, triángulo de alerta por nivel (alto/medio/bajo); los preplans, un edificio ámbar; y cada unidad su **icono por tipo de vehículo** (bomba/cisterna/rescate/ambulancia/mando) con el código al lado, coloreado por estado.
 - **Despacho multi-unidad** — elige **una o varias** unidades con casillas (recomendación de la más cercana disponible) y mensaje de WhatsApp pre-armado con: dirección, coordenadas, **pin de ubicación** (Google Maps), ruta táctica, **foto del reporte**, lista de hidrantes con distancia y presión, y **mapa estático de la escena + hidrantes** (Yandex, sin API key). Cada unidad recibe la misión (push a su tablet) y **acepta por su lado**. Se pueden pedir **refuerzos** mientras el incidente esté despachado o en escena: las unidades ya en misión quedan fijas y solo se suman nuevas. **Solo la central despacha**; las tablets de las unidades reciben, aceptan y actualizan estado, pero no pueden generar despachos. El diálogo muestra la vista previa del mensaje y del mapa antes de confirmar. El botón **«Ruta»** del detalle traza la **ruta vial en el mapa de la central** (OSRM sin key) desde el punto de salida del despacho o el cuartel B-35, con distancia y ETA — sin abrir Google Maps. En el tablero de unidades cada unidad edita su **dotación (efectivos)** en línea.
 - **Tiempo real (SSE)** — nuevos reportes, cambios de estado, despachos y configuración se propagan al instante a todas las pantallas conectadas.
 - **Alarma sonora** (WebAudio) para nuevos reportes, con interruptor en la barra superior.
 - **Parte de emergencia (PDF)** — el botón **«Parte PDF»** del detalle abre `/informe/[id]`: documento A4 con datos del incidente, unidades intervinientes (con horario de despacho y aceptación), evidencia fotográfica, hidrantes de la zona, notas del operador y **bitácora completa**, listo para **imprimir o guardar como PDF** desde el navegador (sin dependencias externas) y con líneas de firma para el jefe de guardia y el operador.
+- **Acceso con cuenta y roles (CAD protegido)** — la central pide **login de operador** (cookie httpOnly, 12 h) con roles `jefe` / `operador` / `lectura`; gestión de operadores y **bitácora del sistema** (auditoría de accesos, despachos, cambios y borrados) en la barra superior — solo el jefe. Toda la API responde 401 sin sesión.
+- **Reportes de tiempos de respuesta** — página `/reportes` con P50/P90 por fase (despacho, ACK, llegada a escena, atención total), por severidad y por unidad, más detalle de cierres; periodo 7/30/90 días e **imprimir/PDF**.
+- **Preplans de riesgo con auto-ficha en escena** — fichas operativas de edificios (peligros, llaves, puntos de agua, contacto, fotos) con pin en el mapa; al seleccionar un incidente a <300 m de un edificio con ficha, el detalle la muestra arriba automáticamente.
 
 - **Máquina de estados** del incidente: `reportado → despachado → en_escena → controlado → cerrado`, con bitácora completa (timeline) por incidente.
 - **Bandeja de incidentes** priorizada por severidad y **panel de unidades** en lista plana con estado, **alta/baja de unidades** desde la central e **inventario de materiales por unidad** (mangueras, extintores, herramientas, rescate, médico, comunicaciones, EPP… con cantidad y condición, y opción de agregar/quitar).
@@ -97,8 +100,25 @@ Flujo principal: **ciudadano → WhatsApp → webhook/ingesta → incidente + ev
 
 ## 🔌 API
 
+> **Toda la API de la central exige sesión de operador** (cookie httpOnly `fm_op` — el proxy de Next 16 responde `401` sin ella; cada endpoint además verifica el rol vigente en la BD). Las excepciones públicas: `/api/app/**`, `/api/units/auth/**`, `/api/units/me/**`, `/api/missions/**`, `/api/whatsapp/**`, `/api/media/**`, `/api/push/key`, `/api/push/subscription` y `/api/operator/login`.
+
+### 🔐 Sesión del operador (CAD)
+
 | Método y ruta | Descripción |
 | --- | --- |
+| `POST /api/operator/login` | `{ email, password }` → cookie de sesión (12 h). Límite de intentos: 5 fallos → 10 min bloqueado por correo+IP. Todo acceso queda en la auditoría |
+| `POST /api/operator/logout` | Cerrar sesión del CAD |
+| `GET/PATCH /api/operator/me` | Operador conectado / cambiar la propia clave (exige la actual) |
+| `GET/POST /api/operator/users` | Gestión de operadores — **solo jefe** |
+| `PATCH/DELETE /api/operator/users/[id]` | Rol, activar/desactivar, restablecer clave, eliminar — **solo jefe** (nunca puede quedar el CAD sin jefe activo) |
+| `GET /api/audit?limit=` | Bitácora del sistema (auditoría) — **solo jefe** |
+
+**Roles**: `jefe` (todo: usuarios, bitácora, borrados) · `operador` (opera el CAD: despachos, incidentes, unidades, hidrantes, preplans) · `lectura` (solo observa). El login se colocó como **puerta de la central**: sin sesión, la pantalla de ingreso reemplaza al tablero.
+
+| Método y ruta | Descripción |
+| --- | --- |
+| `GET/POST /api/preplans` | Fichas operativas de edificios de riesgo: listar y crear (jefe u operador) |
+| `PATCH/DELETE /api/preplans/[id]` | Editar ficha o activarla/desactivarla (jefe u operador) / eliminar (**solo jefe**) |
 | `GET /api/incidents` | Lista de incidentes |
 | `POST /api/incidents` | Crear reporte (`{ title, address, lat, lng, severity, ... }`) |
 | `GET /api/incidents/[id]` | Detalle con bitácora |
@@ -106,6 +126,8 @@ Flujo principal: **ciudadano → WhatsApp → webhook/ingesta → incidente + ev
 | `POST /api/incidents/[id]/dispatch` | Despachar una o varias unidades (`{ unitIds: number[] }`; `unitId` suelto por compat). Admite refuerzos con el incidente en `despachado`/`en_escena`. **Solo la central** |
 | `GET /api/units` · `POST /api/units` | Lista y alta de unidades |
 | `PATCH /api/units/[id]` · `DELETE /api/units/[id]` | Cambiar estado, dotación o ubicación (`lat`/`lng`) / dar de baja una unidad |
+| `GET/POST /api/units/[id]/chat` | Chat central ↔ unidad: historial y enviar mensaje (difundido por SSE) |
+| `GET /api/units/[id]/track` | Recorrido GPS grabado de la unidad (GeoJSON + metros; `?since=ISO` para recortar) |
 | `GET/POST /api/units/[id]/items` · `PATCH/DELETE /api/unit-items/[id]` | Inventario de materiales por unidad |
 | `GET /api/hydrants` · `POST /api/hydrants` · `PATCH /api/hydrants/[id]` | Hidrantes: listar, registrar y cambiar situación |
 | `GET /api/risks` | Puntos de riesgo |
@@ -132,7 +154,8 @@ Sesión en cookie **httpOnly** (JWT HMAC + `tokenVersion` del usuario y `session
 | `GET /api/units/me/mission` | Detalle de la misión: incidente, hidrantes y riesgos cercanos, otras unidades (teléfono del ciudadano **enmascarado**) |
 | `GET /api/units/me/events` | Flujo SSE filtrado para ESTA unidad (despachos, cambios forzados, cierre remoto) |
 | `PATCH /api/units/me/status` | Cambiar estado (`disponible, en_ruta, en_escena, regresando, fuera_servicio`) — conflictos por marca de tiempo: 409 con el estado fresco |
-| `POST /api/units/me/location` | Posición GPS (la app la envía cada 5 s en misión / 30 s en reposo) |
+| `POST /api/units/me/location` | Posición GPS (la app la envía cada 5 s en misión / 30 s en reposo). En misión también graba el **historial** (`GpsPoint`, dedupe <15 m) |
+| `GET/POST /api/units/me/chat` | Chat corto con la central: historial (`?after=ISO`) y enviar mensaje |
 | `POST /api/units/me/push-subscription` | Registrar la suscripción Web Push de la tablet |
 | `GET /api/units/me/sync` | Datos para trabajar sin señal: hidrantes, checklist del vehículo y configuración — con **ETag** (304 si nada cambió) |
 | `PATCH /api/units/me/equipment/[id]` | Marcar un material del checklist diario como revisado |
@@ -141,6 +164,30 @@ Sesión en cookie **httpOnly** (JWT HMAC + `tokenVersion` del usuario y `session
 | `POST /api/units/[id]/logout` | **Cierre remoto** desde la central (tablet robada o perdida) |
 
 Al despachar, la central además envía un **Web Push** a la tablet de la unidad y programa el aviso de «no aceptada» a los 60 s.
+
+### Señal en vivo del mapa (rendimiento)
+
+Los pings de GPS viajan con una **instantánea de la unidad** en el propio evento SSE, así la central mueve el marcador **sin refetch** de incidentes/unidades/stats por cada ping. El refetch completo queda solo para eventos relevantes (despacho, cambio de estado, reportes) y se **coalesce**: varios eventos en ráfaga disparan un único refetch en cadena, no 5 consultas en paralelo cada uno.
+
+- `UNIT_BROADCAST_MS` (variable de entorno, **4000** por defecto): frecuencia mínima de retransmisión por unidad en `POST /api/units/me/location`, antes fija en 8 s. Súbela si el ancho de banda de la tablet es limitado.
+- El marcador de unidad **se interpola** entre su posición anterior y la nueva (3 s, interrumpe si el operador arrastró) — el desplazamiento se ve continuo en lugar de un salto cada ping.
+- **Seguir unidad**: botón «Seguir en el mapa» en el popup de cada unidad; la cámara la centra en cada posición nueva. Se cancela arrastrando el mapa o con la ✕ del chip «Siguiendo…».
+- `GET /api/events` hace un `SELECT 1` cada 60 s para mantener caliente el compute de Neon (evita el arranque en frío de 1-3 s en las primeras respuestas del tablero tras inactividad).
+
+### Herramientas de la tanda «benchmark Bryx/First Due»
+
+- **Chat central ↔ unidad** (`ChatPanel` sobre el mapa; pestaña «Chat» en la tablet): hilo persistente en `ChatMessage`, difusión por SSE (sin polling) y aviso toast + punto de «no leído» en la tablet.
+- **Ver recorrido (GPS)**: botón del popup de unidad — dibuja el historial `GpsPoint` (se graba solo con misión activa, dedupe <15 m) como línea violeta en el mapa.
+- **Regla de medición** («Medir» en el panel del mapa): clic añade vértices, línea magenta con distancia total por superficie geodésica; Esc termina, clic en un vértice lo quita.
+- **ETA por unidad**: chip `~N min · X km` en el detalle (fila «Unidad» y píldoras «Asignadas») calculado de la posición actual a la escena vía `/api/route` (caché 10 min, refresco 90 s).
+- **Ruta desde donde está la unidad**: el origen preferente de la ruta es la posición viva de la unidad despachada si ya se alejó >60 m del punto de salida; si no, el punto de despacho o el cuartel.
+- **Banner de severidad crítica** en el detalle (se apaga al cerrar el incidente).
+
+### Tanda «seguridad + métricas» (roadmap ×10: saltos 1-3)
+
+- **CAD protegido con roles y auditoría**: login de operador (scrypt + JWT en cookie httpOnly, 12 h), roles `jefe`/`operador`/`lectura`, gestión de usuarios en la barra (solo jefe) y **bitácora del sistema** (`AuditLog`: accesos, despachos, cambios de estado, borrados, preplans, configuración) con refresco en vivo cada 30 s. El candado vive en `src/proxy.ts` (proxy Next 16, antes «middleware») — toda la API responde `401` sin sesión.
+- **Reportes de tiempos de respuesta** (`/reportes`): del histórico real de la BD calcula por fase —despacho, ACK de la unidad, llegada a escena y atención total— los percentiles **P50/P90** (más honestos que el promedio), distribución por severidad, ACK p50 por unidad y detalle de los últimos 30 cierres. Selector de 7/30/90 días y botón **Imprimir/Guardar PDF** (el navegador lo exporta a PDF; sin dependencias externas).
+- **Preplans de riesgo** (estilo First Due): fichas operativas de edificios (pisos/distribución, peligros, llaves de acceso, puntos de agua, contacto, fotos por URL) con pin ámbar en el mapa, directorio con búsqueda y — lo más valioso — **auto-ficha en escena**: al seleccionar un incidente a <300 m de un edificio con ficha, el panel de detalle despliega la ficha completa arriba, sin que el operador tenga que buscarla.
 
 ## 📲 Integración con WhatsApp
 

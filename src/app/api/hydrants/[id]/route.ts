@@ -1,8 +1,11 @@
 // PATCH /api/hydrants/[id] — actualizar situación, presión, diámetro,
 // notas o foto. Acepta opId (idempotencia de la cola sin internet).
+// NOTA: desde el candado del proxy esta ruta solo responde a la central
+// (la tablet consume hidrantes por /api/units/me/sync).
 
-import { ApiError, jsonError } from "@/lib/errors";
-import { prisma } from "@/lib/db";
+import { jsonError } from "@/lib/errors";
+import { logAudit } from "@/lib/audit";
+import { operatorActor, requireOperator } from "@/lib/opauth";
 import { runIdempotent } from "@/lib/idem";
 import { saveDataUrl } from "@/lib/media";
 import { updateHydrant } from "@/lib/queries";
@@ -32,6 +35,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/hydrants/[
     }
 
     // Edición desde la central (formato original, sin opId)
+    const op = await requireOperator(request, ["jefe", "operador"]);
     const hydrant = await updateHydrant(hydrantId, {
       pressure: body.pressure,
       diameter: body.diameter,
@@ -39,6 +43,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/hydrants/[
       notes: body.notes,
       photoUrl: body.photoUrl,
     });
+    logAudit(operatorActor(op), "hydrant_patch", { hydrantId, situation: body.situation });
     return Response.json({ hydrant: hydrant as HydrantDTO });
   } catch (e) {
     return jsonError(e);

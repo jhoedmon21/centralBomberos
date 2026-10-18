@@ -7,6 +7,8 @@
 
 export const instant = false;
 
+import Link from "next/link";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import PrintBar from "./print-bar";
 import { nearestHydrants } from "@/lib/geo";
@@ -17,8 +19,9 @@ import {
   STATUS_META,
   UNIT_STATUS_META,
 } from "@/lib/meta";
+import { OPERATOR_COOKIE, verifyOperatorToken } from "@/lib/optoken";
 import { getIncident, listHydrants } from "@/lib/queries";
-import { displayCode, fmtCoords, fmtDateTime, fmtDistance, maskPhone } from "@/lib/utils";
+import { displayCode, fmtCoords, fmtDateTime, fmtDistance, hydrantLabel, maskPhone } from "@/lib/utils";
 
 const EVENT_TYPE_LABEL: Record<string, string> = {
   creado: "Reporte recibido",
@@ -54,6 +57,25 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default async function InformePage(props: PageProps<"/informe/[id]">) {
+  // El parte lleva datos operativos (direcciones, dotación, bitácora):
+  // exige sesión de operador como el resto del CAD.
+  const session = await verifyOperatorToken((await cookies()).get(OPERATOR_COOKIE)?.value);
+  if (!session) {
+    return (
+      <main className="tac-grid flex h-dvh items-center justify-center bg-bg">
+        <div className="text-center">
+          <p className="display text-xl font-bold">Sesión requerida</p>
+          <p className="mt-1 text-[13px] text-mu">
+            <Link href="/" className="underline">
+              Vuelve a la central
+            </Link>{" "}
+            e ingresa con tu cuenta de operador.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   const { id } = await props.params;
   const incident = await getIncident(Number(id)).catch(() => null);
   if (!incident) notFound();
@@ -185,7 +207,7 @@ export default async function InformePage(props: PageProps<"/informe/[id]">) {
               <tbody>
                 {hydrants.map((h) => (
                   <tr key={h.hydrant.id}>
-                    <td className="font-mono font-bold">{h.hydrant.code ?? `H-${h.hydrant.id}`}</td>
+                    <td className="font-mono font-bold">{hydrantLabel(h.hydrant.code)}</td>
                     <td>{fmtDistance(h.meters)}</td>
                     <td>{h.hydrant.pressure ?? "s/d"}</td>
                     <td>{h.hydrant.diameter ? `${h.hydrant.diameter} mm` : "—"}</td>

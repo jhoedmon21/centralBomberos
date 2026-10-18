@@ -5,7 +5,7 @@ import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { Drop, MagnifyingGlass, Plus, X } from "@phosphor-icons/react";
 import { HYDRANT_SITUATION_META } from "@/lib/meta";
 import type { HydrantDTO, HydrantSituation } from "@/lib/types";
-import { cx } from "@/lib/utils";
+import { cx, hydrantLabel } from "@/lib/utils";
 
 interface Props {
   hydrants: HydrantDTO[];
@@ -148,7 +148,7 @@ export default function HydrantsDialog({ hydrants, onClose, onNewHydrant, onSitu
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="display font-mono text-[15px] font-bold tracking-wider">
-                          {h.code ?? `#${h.id}`}
+                          {hydrantLabel(h.code) ?? `#${h.id}`}
                         </span>
                         <span className="chip" style={{ color: `var(${meta.varName})` }}>
                           {meta.label}

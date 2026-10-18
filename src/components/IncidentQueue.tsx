@@ -5,6 +5,7 @@ import { MagnifyingGlass, Phone, WhatsappLogo, X } from "@phosphor-icons/react";
 import { ACTIVE_STATUSES, SEVERITY_META, STATUS_META } from "@/lib/meta";
 import type { IncidentDTO } from "@/lib/types";
 import { cx, displayCode, timeAgo } from "@/lib/utils";
+import IncidentIcon from "./IncidentIcon";
 
 type Filter = "curso" | "todos" | "historial";
 
@@ -119,7 +120,15 @@ export default function IncidentQueue({ incidents, selectedId, lastNewId, onSele
                     style={{ borderLeftColor: sel ? "var(--red)" : `var(${SEVERITY_META[i.severity].varName})` }}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <span className="line-clamp-2 text-[13.5px] leading-tight font-semibold">{i.title}</span>
+                      <span className="flex min-w-0 items-start gap-1.5">
+                        <IncidentIcon
+                          title={i.title}
+                          size={13}
+                          className="mt-0.5 shrink-0"
+                          // El icono hereda el color de la severidad
+                        />
+                        <span className="line-clamp-2 text-[13.5px] leading-tight font-semibold">{i.title}</span>
+                      </span>
                       <span className="chip shrink-0" style={{ color: `var(${st.varName})` }}>
                         {st.short}
                       </span>

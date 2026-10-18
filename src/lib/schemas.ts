@@ -35,6 +35,14 @@ export const locationSchema = z.object({
 
 export const chatSchema = z.object({
   body: z.string().trim().min(1, "Mensaje vacío").max(1000, "Máximo 1000 caracteres"),
+  /** Nota de voz opcional en data URL (el servidor la guarda y la enlaza) */
+  audio: z
+    .string()
+    .startsWith("data:audio/", "El audio no es válido")
+    .max(4_000_000, "El audio no cabe")
+    .optional(),
+  /** Llamado de atención: hace sonar la campana en la otra cabina */
+  urgent: z.boolean().optional(),
 });
 
 // ---------- Central CAD: operadores, auditoría, preplans ----------

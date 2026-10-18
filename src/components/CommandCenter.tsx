@@ -343,7 +343,27 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         }
         if (chat.from === "unidad") {
           const u = units.find((x) => x.id === chat.unitId);
+          // LLAMADO de la unidad: campana + abrir el chat de una vez
+          if (chat.body.startsWith("LLAMADA:")) {
+            playAlarm();
+            setChatUnitId(chat.unitId);
+            setUnreadChatUnits((prev) => new Set(prev).add(chat.unitId));
+            toast.info(`📞 Llamado de voz de ${u?.code ?? "la unidad"} — escucha en el chat`);
+            return;
+          }
+          if (chat.body.startsWith("AUDIO:")) {
+            if (chatUnitIdRef.current !== chat.unitId) {
+              setUnreadChatUnits((prev) => new Set(prev).add(chat.unitId));
+            }
+            toast.info(`🎤 Nota de voz de ${u?.code ?? "la unidad"}`, {
+              action: { label: "Abrir chat", onClick: () => openChatFor(chat.unitId) },
+            });
+            return;
+          }
           const clip = chat.body.length > 80 ? `${chat.body.slice(0, 80)}…` : chat.body;
+          if (chatUnitIdRef.current !== chat.unitId) {
+            setUnreadChatUnits((prev) => new Set(prev).add(chat.unitId));
+          }
           toast.info(`💬 ${u?.code ?? "Unidad"}: ${clip}`);
         }
         return;

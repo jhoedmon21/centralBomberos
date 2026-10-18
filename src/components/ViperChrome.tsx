@@ -144,16 +144,16 @@ export function ViperRail({
       {/* Hora y fecha del servicio: junta al indicador de línea, no flota */}
       <ViperClock />
 
-      {/* Unidades: toque = seguir cámara (dot de estado) */}
-      <div className="flex shrink-0 items-center gap-1 border-l border-line pl-2">
+      {/* Unidades: integradas a la cinta (sin cajas), toque = seguir cámara */}
+      <div className="flex shrink-0 items-center gap-0.5 pl-1">
         {units.slice(0, 8).map((u) => (
           <button
             key={u.id}
             type="button"
             onClick={() => onFollowUnit(followUnitId === u.id ? null : u.id)}
             title={`${u.code} · ${u.name} — clic para seguir la cámara`}
-            className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-[10.5px] font-bold transition-colors ${
-              followUnitId === u.id ? "border-amber text-amber" : "border-line text-tx hover:border-line2"
+            className={`flex shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2 py-1 text-[10.5px] font-bold transition-colors ${
+              followUnitId === u.id ? "border-amber bg-amber/10 text-amber" : "text-tx hover:bg-panel2/70"
             }`}
           >
             <span
@@ -173,8 +173,14 @@ export function ViperRail({
       <button type="button" className="btn btn-sm btn-red shrink-0" onClick={onOpenHydrants} title="Directorio de hidrantes (grifos)">
         <Drop size={14} aria-hidden="true" /> <span className="hidden sm:inline">Grifos</span>
       </button>
-      <button type="button" className="btn btn-sm btn-red shrink-0" onClick={onNewReport} title="Registrar un reporte manual">
-        <Plus size={14} weight="bold" aria-hidden="true" /> <span className="hidden sm:inline">Nuevo</span>
+      {/* NUEVO — el botón que no se puede pasar por alto */}
+      <button
+        type="button"
+        className="anim-pulse-ring relative flex shrink-0 items-center gap-1.5 rounded-lg bg-red px-3.5 py-2 text-[12.5px] font-bold text-white transition-transform hover:scale-[1.04]"
+        onClick={onNewReport}
+        title="Registrar un reporte manual"
+      >
+        <Plus size={15} weight="bold" aria-hidden="true" /> Nuevo
       </button>
       <button type="button" className="btn btn-sm shrink-0" onClick={onSimulate} disabled={simBusy} title="Simular reporte por WhatsApp">
         <WhatsappLogo size={14} weight="fill" className="text-green" aria-hidden="true" />

@@ -378,6 +378,22 @@
     background: linear-gradient(180deg, var(--panel) 0%, color-mix(in srgb, var(--bg) 42%, var(--panel)) 100%);
   }
 
+  /* Anillo llamativo (botón Nuevo de la CAD y grabación en curso) */
+  @keyframes pulseRing {
+    0% {
+      box-shadow: 0 0 0 0 rgb(255 85 62 / 0.55);
+    }
+    70% {
+      box-shadow: 0 0 0 9px rgb(255 85 62 / 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgb(255 85 62 / 0);
+    }
+  }
+  .anim-pulse-ring {
+    animation: pulseRing 1.6s ease-out infinite;
+  }
+
   /* Paneles flotantes sobre el mapa */
   .map-panel {
     background: color-mix(in srgb, var(--panel) 86%, transparent);

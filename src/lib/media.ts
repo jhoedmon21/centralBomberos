@@ -15,13 +15,18 @@ const MIME_BY_EXT: Record<string, string> = {
   ".webp": "image/webp",
   ".gif": "image/gif",
   ".svg": "image/svg+xml",
+  // Notas de voz (chat central ↔ unidad)
+  ".webm": "audio/webm",
+  ".mp4": "audio/mp4",
+  ".m4a": "audio/mp4",
+  ".ogg": "audio/ogg",
 };
 
 export function mediaMime(name: string): string | null {
   return MIME_BY_EXT[extname(name).toLowerCase()] ?? null;
 }
 
-/** Guarda bytes de imagen y devuelve la URL pública (/api/media/...) */
+/** Guarda bytes de imagen o audio y devuelve la URL pública (/api/media/...) */
 export async function saveMedia(bytes: Uint8Array, ext: string): Promise<string | null> {
   if (bytes.length === 0 || bytes.length > MAX_BYTES) return null;
   const safeExt = MIME_BY_EXT[ext.toLowerCase()] ? ext.toLowerCase() : ".jpg";
@@ -31,9 +36,9 @@ export async function saveMedia(bytes: Uint8Array, ext: string): Promise<string 
   return `/api/media/${name}`;
 }
 
-/** Guarda una imagen en formato data URL (data:image/jpeg;base64,...) */
+/** Guarda una imagen o audio en formato data URL (data:…;base64,...) */
 export async function saveDataUrl(dataUrl: string): Promise<string | null> {
-  const m = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i.exec(dataUrl.trim());
+  const m = /^data:(image\/[a-z0-9.+-]+|audio\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i.exec(dataUrl.trim());
   if (!m) return null;
   const mime = m[1].toLowerCase();
   const ext = mime.includes("png")
@@ -44,7 +49,13 @@ export async function saveDataUrl(dataUrl: string): Promise<string | null> {
         ? ".gif"
         : mime.includes("svg")
           ? ".svg"
-          : ".jpg";
+          : mime.includes("mp4")
+            ? ".m4a"
+            : mime.includes("ogg")
+              ? ".ogg"
+              : mime.includes("image")
+                ? ".jpg"
+                : ".webm";
   try {
     return await saveMedia(Buffer.from(m[2].replace(/\s/g, ""), "base64"), ext);
   } catch {

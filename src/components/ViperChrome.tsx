@@ -273,7 +273,7 @@ export function ViperDrawer(props: ViperDrawerProps) {
 
   return (
     <div
-      className="absolute left-2 top-14 bottom-2 z-40 flex w-[300px] max-w-[84vw] flex-col overflow-hidden rounded-xl border border-line bg-panel/95 shadow-2xl backdrop-blur"
+      className="pointer-events-auto absolute left-2 top-14 bottom-2 z-40 flex w-[300px] max-w-[84vw] flex-col overflow-hidden rounded-xl border border-line bg-panel/95 shadow-2xl backdrop-blur"
       role="dialog"
       aria-label="Cajón de módulos B-35"
     >
@@ -361,7 +361,7 @@ export interface ViperStripProps {
 export function ViperStrip({ incident, onOpenDetail }: ViperStripProps) {
   if (!incident) {
     return (
-      <div className="absolute bottom-16 left-1/2 z-10 -translate-x-1/2 lg:bottom-2" role="status">
+      <div className="pointer-events-auto absolute bottom-16 left-1/2 z-10 -translate-x-1/2 lg:bottom-2" role="status">
         <div className="map-panel flex items-center gap-2 rounded-full px-4 py-2 text-[12px] text-mu">
           <Fire size={14} className="text-green" aria-hidden="true" /> Sin emergencias en pantalla
         </div>
@@ -370,7 +370,7 @@ export function ViperStrip({ incident, onOpenDetail }: ViperStripProps) {
   }
   const when = new Date(incident.createdAt);
   return (
-    <div className="absolute bottom-16 left-1/2 z-10 w-[min(92vw,540px)] -translate-x-1/2 lg:bottom-2" role="status">
+    <div className="pointer-events-auto absolute bottom-16 left-1/2 z-10 w-[min(92vw,540px)] -translate-x-1/2 lg:bottom-2" role="status">
       <div className="map-panel flex items-center gap-3 rounded-xl p-2.5 pr-4">
         <button
           type="button"

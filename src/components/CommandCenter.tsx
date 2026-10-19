@@ -944,7 +944,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         />
       </div>
 
-      <div className="relative z-[5] flex h-full flex-col">
+      <div className="relative z-[5] flex h-full flex-col pointer-events-none">
         <ViperRail
           op={op}
           live={live}
@@ -1018,7 +1018,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         {/* Selector de unidad para conversar (píldora Chat / cajón) */}
         {chatPickOpen && (
           <div
-            className="map-panel absolute right-2 top-24 z-10 flex max-h-[60vh] w-[252px] max-w-[92vw] flex-col overflow-hidden rounded-xl"
+            className="map-panel pointer-events-auto absolute right-2 top-24 z-10 flex max-h-[60vh] w-[252px] max-w-[92vw] flex-col overflow-hidden rounded-xl"
             role="dialog"
             aria-label="Elegir unidad para conversar"
           >
@@ -1061,7 +1061,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         {/* Reportes: tarjeta flotante IZQUIERDA sobre el mapa */}
         {queueOpen && (
           <aside
-            className="map-panel absolute left-2 top-24 bottom-16 z-10 flex w-[320px] max-w-[92vw] flex-col overflow-hidden rounded-xl lg:bottom-2"
+            className="map-panel pointer-events-auto absolute left-2 top-24 bottom-16 z-10 flex w-[320px] max-w-[92vw] flex-col overflow-hidden rounded-xl lg:bottom-2"
             aria-label="Reportes activos"
           >
             <IncidentQueue
@@ -1087,7 +1087,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         {/* Detalle: tarjeta flotante DERECHA sobre el mapa */}
         {detailOpen && (
           <aside
-            className="map-panel absolute right-2 top-24 bottom-16 z-10 flex w-[385px] max-w-[92vw] flex-col overflow-hidden rounded-xl lg:bottom-2"
+            className="map-panel pointer-events-auto absolute right-2 top-24 bottom-16 z-10 flex w-[385px] max-w-[92vw] flex-col overflow-hidden rounded-xl lg:bottom-2"
             aria-label="Detalle del reporte"
           >
             <DetailPanel
@@ -1122,7 +1122,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
 
       {/* Píldora flotante de paneles (cabina): el mapa nunca se tapa por columnas */}
       <nav
-        className="absolute bottom-2 left-2 z-20 flex h-11 items-center gap-1 rounded-full border border-line bg-panel/95 px-1.5 shadow-lg backdrop-blur"
+        className="pointer-events-auto absolute bottom-2 left-2 z-20 flex h-11 items-center gap-1 rounded-full border border-line bg-panel/95 px-1.5 shadow-lg backdrop-blur"
         aria-label="Paneles de la cabina"
       >
         <button

@@ -65,7 +65,7 @@ export default function UnitsPanel({
     <div
       ref={dialogRef}
       tabIndex={-1}
-      className="fixed inset-0 z-[1000] grid place-items-center bg-black/65 p-4"
+      className="pointer-events-auto fixed inset-0 z-[1000] grid place-items-center bg-black/65 p-4"
       role="dialog"
       aria-modal="true"
       aria-label="Gestión de unidades"

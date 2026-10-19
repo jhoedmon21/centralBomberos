@@ -1137,8 +1137,9 @@ export default function MapView({
         </div>
       )}
 
-      {/* Capas y leyenda: un solo botón para despejar el mapa */}
-      <div className="map-float absolute top-3 left-3 z-[900]">
+      {/* Capas y registro de hidrante: junto a la fila de acciones, lado
+          derecho libre (abajo/derecha del reloj) — despejado de la marca */}
+      <div className="map-float absolute right-3 top-[3.9rem] z-[900] flex flex-col items-end">
         <div className="flex items-center gap-1.5">
           <button
             className={cx("btn btn-sm", panelOpen && "border-amber/60 text-amber")}
@@ -1155,17 +1156,6 @@ export default function MapView({
             title="Registrar un hidrante en el mapa"
           >
             <Plus size={14} aria-hidden="true" /> Hidrante
-          </button>
-          <button
-            className={cx("btn btn-sm", measuring && "border-amber/60 text-amber")}
-            onClick={() => (measuring ? setMeasure(null) : setMeasure([]))}
-            title={
-              measuring
-                ? "Terminar la medición"
-                : "Medir distancias en el mapa: cada clic añade un vértice"
-            }
-          >
-            <Ruler size={14} aria-hidden="true" /> {measuring ? "Medir…" : "Medir"}
           </button>
         </div>
         {panelOpen && (

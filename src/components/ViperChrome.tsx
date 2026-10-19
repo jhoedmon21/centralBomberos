@@ -22,8 +22,6 @@ import {
   Scroll,
   SignOut,
   Siren,
-  Sun,
-  Moon,
   Bell,
   BellSlash,
   Broadcast,
@@ -82,11 +80,9 @@ export interface ViperRailProps {
   live: boolean;
   soundOn: boolean;
   simBusy: boolean;
-  theme: "dark" | "light";
   units: UnitDTO[];
   unreadChat: number;
   onToggleDrawer: () => void;
-  onToggleTheme: () => void;
   onToggleSound: () => void;
   onSimulate: () => void;
   onNewReport: () => void;
@@ -101,11 +97,9 @@ export function ViperRail({
   live,
   soundOn,
   simBusy,
-  theme,
   units,
   unreadChat,
   onToggleDrawer,
-  onToggleTheme,
   onToggleSound,
   onSimulate,
   onNewReport,
@@ -215,15 +209,6 @@ export function ViperRail({
       >
         {soundOn ? <Bell size={14} className="text-amber" aria-hidden="true" /> : <BellSlash size={14} className="text-mu" aria-hidden="true" />}
       </button>
-      <button
-        type="button"
-        className="btn btn-sm pointer-events-auto shadow-md"
-        onClick={onToggleTheme}
-        title={theme === "dark" ? "Modo claro" : "Modo oscuro"}
-        aria-label={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-      >
-        {theme === "dark" ? <Sun size={14} aria-hidden="true" /> : <Moon size={14} aria-hidden="true" />}
-      </button>
       <span className="hidden shrink-0 items-center pl-1 text-[10px] leading-none text-mu2 xl:flex" title={`Sesión: ${op.email}`}>
         {op.name}
       </span>
@@ -242,7 +227,6 @@ export interface ViperDrawerProps {
   stats: StatsDTO;
   simBusy: boolean;
   onClose: () => void;
-  onToggleTheme: () => void;
   onToggleSound: () => void;
   onSimulate: () => void;
   onNewReport: () => void;
@@ -283,7 +267,7 @@ function MenuItem({
 }
 
 export function ViperDrawer(props: ViperDrawerProps) {
-  const { op, theme, soundOn, live, stats, simBusy, onClose } = props;
+  const { op, soundOn, live, stats, simBusy, onClose } = props;
   const now = useClock(30_000);
   const chief = op.role === "jefe";
 
@@ -317,11 +301,6 @@ export function ViperDrawer(props: ViperDrawerProps) {
         <MenuItem icon={<Key size={17} />} label="Mi clave" onClick={props.onOpenMiClave} />
         {chief && <MenuItem icon={<Users size={17} />} label="Operadores" onClick={props.onOpenUsers} />}
         {chief && <MenuItem icon={<Scroll size={17} />} label="Historial de comunicaciones" onClick={props.onOpenAudit} />}
-        <MenuItem
-          icon={theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-          label={theme === "dark" ? "Modo claro" : "Modo oscuro"}
-          onClick={props.onToggleTheme}
-        />
         <MenuItem
           icon={soundOn ? <Bell size={17} className="text-amber" /> : <BellSlash size={17} />}
           label={soundOn ? "Silenciar alertas" : "Activar alertas"}

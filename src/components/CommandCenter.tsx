@@ -950,10 +950,8 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
           live={live}
           soundOn={soundOn}
           simBusy={simBusy}
-          theme={theme}
           units={units}
           onToggleDrawer={toggleDrawer}
-          onToggleTheme={toggleTheme}
           onToggleSound={toggleSound}
           onSimulate={simulate}
           onNewReport={() => {
@@ -1000,7 +998,6 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
             stats={stats}
             simBusy={simBusy}
             onClose={() => setDrawerOpen(false)}
-            onToggleTheme={toggleTheme}
             onToggleSound={toggleSound}
             onSimulate={simulate}
             onNewReport={() => {

@@ -11,11 +11,9 @@ import {
   Flame,
   GearSix,
   Key,
-  Moon,
   Plus,
   Scroll,
   SignOut,
-  Sun,
   Users,
   WhatsappLogo,
 } from "@phosphor-icons/react";
@@ -33,10 +31,8 @@ interface Props {
   live: boolean;
   soundOn: boolean;
   simBusy: boolean;
-  theme: "dark" | "light";
   /** Operador conectado al CAD (sesión) */
   op: OperatorDTO;
-  onToggleTheme: () => void;
   onToggleSound: () => void;
   onSimulate: () => void;
   onNewReport: () => void;
@@ -53,9 +49,7 @@ export default function TopBar({
   live,
   soundOn,
   simBusy,
-  theme,
   op,
-  onToggleTheme,
   onToggleSound,
   onSimulate,
   onNewReport,
@@ -119,14 +113,6 @@ export default function TopBar({
       <div className="mx-1 hidden h-6 w-px bg-line md:block" />
 
       {/* Acciones */}
-      <button
-        className="btn btn-sm"
-        onClick={onToggleTheme}
-        aria-label={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
-        title={theme === "dark" ? "Tema claro" : "Tema oscuro"}
-      >
-        {theme === "dark" ? <Sun size={15} aria-hidden="true" /> : <Moon size={15} aria-hidden="true" />}
-      </button>
       <button
         className="btn btn-sm"
         onClick={onToggleSound}

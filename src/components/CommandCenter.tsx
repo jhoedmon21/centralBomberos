@@ -122,8 +122,12 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
   const [chatPickOpen, setChatPickOpen] = useState(false);
   /** Unidades con mensajes sin leer: badge Chat y aviso en el selector */
   const [unreadChatUnits, setUnreadChatUnits] = useState<Set<number>>(new Set());
+  /** Al abrir el chat de una unidad con avisos sin leer: la última respuesta
+   *  se muestra con el destello NUEVO (se captura ANTES de limpiar el aviso). */
+  const [chatOpenedUnread, setChatOpenedUnread] = useState(false);
 
   function openChatFor(unitId: number) {
+    setChatOpenedUnread(unreadChatUnits.has(unitId));
     setChatUnitId(unitId);
     setChatPickOpen(false);
     setUnreadChatUnits((prev) => {
@@ -349,28 +353,27 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         }
         if (chat.from === "unidad") {
           const u = units.find((x) => x.id === chat.unitId);
-          // LLAMADO de la unidad: campana + abrir el chat de una vez
-          if (chat.body.startsWith("LLAMADA:")) {
-            playAlarm();
-            setChatUnitId(chat.unitId);
-            setUnreadChatUnits((prev) => new Set(prev).add(chat.unitId));
-            toast.info(`📞 Llamado de voz de ${u?.code ?? "la unidad"} — escucha en el chat`);
-            return;
-          }
-          if (chat.body.startsWith("AUDIO:")) {
+          // Nota de voz (o «LLAMADA:» antiguo, ya sin campana): aviso que abre el chat
+          if (chat.body.startsWith("AUDIO:") || chat.body.startsWith("LLAMADA:")) {
             if (chatUnitIdRef.current !== chat.unitId) {
               setUnreadChatUnits((prev) => new Set(prev).add(chat.unitId));
             }
             toast.info(`🎤 Nota de voz de ${u?.code ?? "la unidad"}`, {
+              duration: 9000,
               action: { label: "Abrir chat", onClick: () => openChatFor(chat.unitId) },
             });
             return;
           }
+          // Respuesta escrita de la unidad: aviso llamativo con acceso a responder
           const clip = chat.body.length > 80 ? `${chat.body.slice(0, 80)}…` : chat.body;
           if (chatUnitIdRef.current !== chat.unitId) {
             setUnreadChatUnits((prev) => new Set(prev).add(chat.unitId));
           }
-          toast.info(`💬 ${u?.code ?? "Unidad"}: ${clip}`);
+          toast.warning(`💬 ${u?.code ?? "Unidad"}: ${clip}`, {
+            description: "La unidad respondió — abre el chat para contestarle.",
+            duration: 9000,
+            action: { label: "Responder", onClick: () => openChatFor(chat.unitId) },
+          });
         }
         return;
       }
@@ -933,7 +936,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
           onFollowUnit={setFollowUnitId}
           track={track}
           onTrack={toggleTrack}
-          onChat={(u) => setChatUnitId(u.id)}
+          onChat={(u) => openChatFor(u.id)}
           onPreplanView={(p) => setPreplanView(p)}
           onToggleLayer={(key) => setLayers((l) => ({ ...l, [key]: !l[key] }))}
           onSelect={(id) => select(id)}
@@ -1080,6 +1083,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
             unitId={chatUnitId}
             unitCode={units.find((u) => u.id === chatUnitId)?.code ?? "Unidad"}
             incoming={lastChat}
+            openUnread={chatOpenedUnread}
             onClose={() => setChatUnitId(null)}
           />
         )}

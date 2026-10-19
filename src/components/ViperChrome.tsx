@@ -184,7 +184,7 @@ export function ViperRail({
       </Link>
       <button
         type="button"
-        className="btn btn-sm pointer-events-auto relative shadow-md"
+        className={`btn btn-sm pointer-events-auto relative shadow-md${unreadChat > 0 ? " anim-pulse-ring" : ""}`}
         onClick={onOpenChat}
         title="Chat con las unidades"
         aria-label={unreadChat > 0 ? `Chat con unidades: ${unreadChat} sin leer` : "Chat con unidades"}
@@ -193,7 +193,7 @@ export function ViperRail({
         <span className="hidden md:inline">Chat</span>
         {unreadChat > 0 && (
           <span
-            className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-amber px-0.5 text-[8.5px] font-bold text-black"
+            className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-red px-0.5 text-[8.5px] font-bold text-white"
             aria-hidden="true"
           >
             {unreadChat > 9 ? "9+" : unreadChat}

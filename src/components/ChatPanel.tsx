@@ -2,10 +2,10 @@
 
 // Chat corto central ↔ unidad (estilo Bryx team messaging). Panel anclado
 // sobre el mapa; el hilo llega por GET en la apertura y por SSE después.
-// Con voz: notas grabadas (AUTO) y «Llamar» (aviso con campana en la tablet).
+// Con voz: notas grabadas (AUDIO) — la respuesta de la unidad llega como alerta.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChatCircle, Megaphone, Microphone, PaperPlaneTilt, Stop, Truck, X } from "@phosphor-icons/react";
+import { ChatCircle, Microphone, PaperPlaneTilt, Stop, Truck, X } from "@phosphor-icons/react";
 import type { ChatDTO } from "@/lib/types";
 import { useDraggablePanel } from "@/hooks/useDraggablePanel";
 import { cx, timeAgo } from "@/lib/utils";
@@ -15,10 +15,12 @@ interface Props {
   unitCode: string;
   /** Último evento SSE de chat (cualquier unidad); este panel filtra el suyo */
   incoming: { unitId: number; msg: ChatDTO } | null;
+  /** La unidad tenía avisos sin leer al abrir: la última respuesta va con NUEVO */
+  openUnread: boolean;
   onClose: () => void;
 }
 
-export default function ChatPanel({ unitId, unitCode, incoming, onClose }: Props) {
+export default function ChatPanel({ unitId, unitCode, incoming, openUnread, onClose }: Props) {
   const [messages, setMessages] = useState<ChatDTO[] | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,6 +28,11 @@ export default function ChatPanel({ unitId, unitCode, incoming, onClose }: Props
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const { dragging, panelStyle, handleProps } = useDraggablePanel(panelRef);
+  // Respuesta que llegó sin leer (capturada al abrir) — para el destello NUEVO
+  const [initialUnread] = useState(openUnread);
+  // Respuestas que llegan por SSE con el panel abierto: destello NUEVO también
+  const flashRef = useRef(true);
+  const [flashIds, setFlashIds] = useState<ReadonlySet<number>>(() => new Set());
 
   // Historial al abrir (el panel se remonta por key en el padre)
   useEffect(() => {
@@ -51,13 +58,17 @@ export default function ChatPanel({ unitId, unitCode, incoming, onClose }: Props
 
   // Mensaje entrante por SSE (dedupe por id: el eco del propio POST puede
   // repetirse). La fusión se hace en un callback externo — no un setState
-  // síncrono dentro del efecto.
+  // síncrono dentro del efecto. La primera pasada no destella (ya viene del GET).
   useEffect(() => {
     if (!incoming || incoming.unitId !== unitId) return;
     const t = setTimeout(() => {
       setMessages((prev) =>
         prev && !prev.some((m) => m.id === incoming.msg.id) ? [...prev, incoming.msg] : prev,
       );
+      if (!flashRef.current && incoming.msg.from === "unidad") {
+        setFlashIds((s) => new Set(s).add(incoming.msg.id));
+      }
+      flashRef.current = false;
     }, 0);
     return () => clearTimeout(t);
   }, [incoming, unitId]);
@@ -89,17 +100,15 @@ export default function ChatPanel({ unitId, unitCode, incoming, onClose }: Props
     }
   }, [draft, busy, unitId]);
 
-  // ---------- Nota de voz + «Llamar» ----------
+  // ---------- Nota de voz (la grabación se envía como AUDIO) ----------
   const recRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const secsRef = useRef(0);
-  // El próximo stop manda como LLAMADA (campana) en vez de AUDIO (nota)
-  const urgentNextRef = useRef(false);
   const [recSecs, setRecSecs] = useState<number | null>(null);
 
   const postVoice = useCallback(
-    async (blob: Blob, url: string, urgent: boolean) => {
+    async (blob: Blob, url: string) => {
       setBusy(true);
       try {
         const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -112,9 +121,8 @@ export default function ChatPanel({ unitId, unitCode, incoming, onClose }: Props
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            body: url.trim() || (urgent ? "📞 Llamado de voz de la central" : "🎤 Nota de voz de la central"),
+            body: url.trim() || "🎤 Nota de voz de la central",
             audio: `data:${mime};base64,${btoa(bin)}`,
-            urgent,
           }),
         });
         const d = (await r.json()) as { message?: ChatDTO; error?: string };
@@ -160,14 +168,11 @@ export default function ChatPanel({ unitId, unitCode, incoming, onClose }: Props
         stream.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
         const secs = secsRef.current;
-        const urgent = urgentNextRef.current;
-        urgentNextRef.current = false;
         setRecSecs(null);
         recRef.current = null;
         void postVoice(
           new Blob(chunksRef.current, { type: rec.mimeType || mime || "audio/webm" }),
-          draft.trim() || (urgent ? "📞 Llamado de voz de la central" : `🎤 Nota de voz (${secs}s de la central)`),
-          urgent,
+          draft.trim() || `🎤 Nota de voz (${secs}s de la central)`,
         );
       };
       rec.start();
@@ -175,7 +180,6 @@ export default function ChatPanel({ unitId, unitCode, incoming, onClose }: Props
       setRecSecs(0);
       setError(null);
     } catch (e) {
-      urgentNextRef.current = false;
       setError((e as Error).message || "No se pudo usar el micrófono");
     }
   }, [draft, postVoice]);
@@ -191,33 +195,10 @@ export default function ChatPanel({ unitId, unitCode, incoming, onClose }: Props
     return () => window.clearInterval(id);
   }, [recSecs != null, stopRec]);
 
-  const callUnit = useCallback(() => {
-    if (recSecs != null) {
-      // Está grabando: la grabación en curso se convierte en el LLAMADO
-      urgentNextRef.current = true;
-      stopRec();
-      return;
-    }
-    setBusy(true);
-    void (async () => {
-      try {
-        const r = await fetch(`/api/units/${unitId}/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ body: draft.trim() || "📞 Llamado de voz de la central — ábreme", urgent: true }),
-        });
-        const d = (await r.json()) as { message?: ChatDTO; error?: string };
-        if (!r.ok || !d.message) throw new Error(d.error ?? `Error ${r.status}`);
-        setMessages((prev) => (prev ? [...prev, d.message as ChatDTO] : [d.message as ChatDTO]));
-        setDraft("");
-        setError(null);
-      } catch (e) {
-        setError((e as Error).message);
-      } finally {
-        setBusy(false);
-      }
-    })();
-  }, [recSecs, stopRec, unitId, draft]);
+  // Última respuesta de la unidad: si la unidad tenía avisos sin leer al
+  // abrir, esa respuesta lleva el destello NUEVO.
+  const unitMsgs = (messages ?? []).filter((m) => m.from === "unidad");
+  const lastUnitId = unitMsgs.length ? unitMsgs[unitMsgs.length - 1].id : null;
 
   return (
     <div
@@ -252,47 +233,56 @@ export default function ChatPanel({ unitId, unitCode, incoming, onClose }: Props
         )}
         {error && <p className="text-[12px] text-red">{error}</p>}
         {messages?.map((m) => {
-          // AUDIO:<url> = nota de voz · LLAMADA:<url> = llamado urgente
+          // AUDIO:<url> = nota de voz · LLAMADA:<…> = llamado de voz (antiguo)
           const audioUrl = m.body.startsWith("AUDIO:") ? m.body.slice(6) : null;
-          const callUrl = m.body.startsWith("LLAMADA:") ? m.body.slice(8) || null : null;
-          const isVoice = audioUrl != null || callUrl != null;
+          const callRest = m.body.startsWith("LLAMADA:") ? m.body.slice(8) : null;
+          const callUrl = callRest?.startsWith("/api/media/") ? callRest : null;
+          const callText = callRest != null && callUrl == null ? callRest.trim() : null;
+          const voiceUrl = audioUrl ?? callUrl;
+          const isVoice = voiceUrl != null;
+          const own = m.from === "central";
+          const isNew = !own && (flashIds.has(m.id) || (initialUnread && lastUnitId === m.id));
+          const body = isVoice ? (
+            <>
+              <p className="flex items-center gap-1.5 text-[11px] font-bold">
+                <Microphone size={12} className="text-blue" aria-hidden="true" /> Nota de voz
+              </p>
+              <audio className="mt-1.5 w-[212px]" controls preload="none" src={voiceUrl ?? undefined}>
+                Tu navegador no reproduce este audio.
+              </audio>
+            </>
+          ) : (
+            <p className="break-words whitespace-pre-wrap">{callText ?? m.body}</p>
+          );
           return (
-            <div key={m.id} className={cx("flex", m.from === "central" ? "justify-end" : "justify-start")}>
-              <div
-                className={cx(
-                  "max-w-[85%] rounded border px-2.5 py-1.5 text-[12.5px] leading-snug",
-                  m.from === "central"
-                    ? "border-amber/50 bg-amber/10 text-tx"
-                    : "border-line bg-panel2 text-tx",
-                )}
-              >
-                {isVoice ? (
-                  <>
-                    <p className="flex items-center gap-1.5 text-[11px] font-bold">
-                      {callUrl != null ? (
-                        <>
-                          <Megaphone size={12} className="text-red" aria-hidden="true" /> Llamado urgente de voz
-                        </>
-                      ) : (
-                        <>
-                          <Microphone size={12} className="text-blue" aria-hidden="true" /> Nota de voz
-                        </>
-                      )}
-                    </p>
-                    {audioUrl && (
-                      <audio className="mt-1.5 w-[212px]" controls preload="none" src={audioUrl}>
-                        Tu navegador no reproduce este audio.
-                      </audio>
-                    )}
-                    {!audioUrl && <p className="text-[11px] text-mu2">Sin audio: aviso con campana.</p>}
-                  </>
-                ) : (
-                  <p className="break-words whitespace-pre-wrap">{m.body}</p>
-                )}
-                <p className="mt-0.5 text-right font-mono text-[9.5px] text-mu2" suppressHydrationWarning>
-                  {timeAgo(m.at)}
-                </p>
-              </div>
+            <div key={m.id} className={cx("flex", own && "justify-end")}>
+              {own ? (
+                <div className="max-w-[85%] rounded border border-amber/50 bg-amber/10 px-2.5 py-1.5 text-[12.5px] leading-snug text-tx">
+                  {body}
+                  <p className="mt-0.5 text-right font-mono text-[9.5px] text-mu2" suppressHydrationWarning>
+                    {timeAgo(m.at)}
+                  </p>
+                </div>
+              ) : (
+                /* Respuesta de la UNIDAD: tarjeta de alerta — con NUEVO si
+                   acaba de llegar (al abrir sin leer o en vivo con el chat abierto) */
+                <div
+                  className={cx(
+                    "max-w-[92%] rounded border border-red/50 border-l-4 border-l-red bg-red/10 px-2.5 py-1.5 text-[12.5px] leading-snug",
+                    isNew && "chat-unit-new",
+                  )}
+                >
+                  <p className="chat-unit-hd">
+                    <Truck size={12} weight="fill" aria-hidden="true" />
+                    Respuesta de {unitCode}
+                    {isNew && <span className="chat-unit-pill">NUEVO</span>}
+                  </p>
+                  <div className="mt-1 text-tx">{body}</div>
+                  <p className="mt-0.5 text-right font-mono text-[9.5px] text-mu2" suppressHydrationWarning>
+                    {timeAgo(m.at)}
+                  </p>
+                </div>
+              )}
             </div>
           );
         })}
@@ -337,15 +327,6 @@ export default function ChatPanel({ unitId, unitCode, incoming, onClose }: Props
           autoComplete="off"
           maxLength={1000}
         />
-        <button
-          type="button"
-          className="btn btn-sm btn-red shrink-0"
-          onClick={callUnit}
-          disabled={busy}
-          title="Llamar por voz: la tablet del chofer suena hasta atender"
-        >
-          <Megaphone size={13} aria-hidden="true" /> Llamar
-        </button>
         <button className="btn btn-sm btn-blue shrink-0" type="submit" disabled={busy || !draft.trim()}>
           <PaperPlaneTilt size={13} aria-hidden="true" /> {busy ? "…" : "Enviar"}
         </button>

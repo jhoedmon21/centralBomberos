@@ -700,6 +700,22 @@
   color: var(--tx);
   mix-blend-mode: normal;
 }
+/* Flecha de rumbo de la unidad (rota con el último desplazamiento GPS) */
+.mk-unit .unit-bearing {
+  position: absolute;
+  top: -15px;
+  left: 50%;
+  z-index: 1;
+  display: grid;
+  width: 13px;
+  height: 13px;
+  margin-left: -6.5px;
+  place-items: center;
+  color: var(--amber);
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.7));
+  pointer-events: none;
+  transition: transform 0.35s linear;
+}
 
 /* ---------- Sonner (alertas) ---------- */
 

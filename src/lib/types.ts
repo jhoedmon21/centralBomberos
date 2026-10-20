@@ -57,6 +57,12 @@ export interface UnitDTO {
   /** Marca del último cambio de estado (resuelve conflictos app ↔ central) */
   statusAt: string;
   statusSource: "unidad" | "operador" | "sistema";
+  /** Solo en la central: rumbo (°) derivado de los últimos pings GPS */
+  heading?: number | null;
+  /** Solo en la central: velocidad (km/h) derivada de los últimos pings GPS */
+  speedKmh?: number | null;
+  /** Solo en la central: instante (ms) del último ping recibido por SSE */
+  pingAt?: number;
 }
 
 export interface UnitItemDTO {

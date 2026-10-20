@@ -171,7 +171,11 @@ Los pings de GPS viajan con una **instantánea de la unidad** en el propio event
 
 - `UNIT_BROADCAST_MS` (variable de entorno, **4000** por defecto): frecuencia mínima de retransmisión por unidad en `POST /api/units/me/location`, antes fija en 8 s. Súbela si el ancho de banda de la tablet es limitado.
 - El marcador de unidad **se interpola** entre su posición anterior y la nueva (3 s, interrumpe si el operador arrastró) — el desplazamiento se ve continuo en lugar de un salto cada ping.
-- **Seguir unidad**: botón «Seguir en el mapa» en el popup de cada unidad; la cámara la centra en cada posición nueva. Se cancela arrastrando el mapa o con la ✕ del chip «Siguiendo…».
+- **Seguir unidad**: botón «Seguir en el mapa» en el popup de cada unidad; la cámara la centra en cada posición nueva. Se cancela arrastrando el mapa o con la ✕ del chip «Siguiendo…». Si se despacha **una sola** unidad, la central la sigue automáticamente al salir.
+- **Rastro GPS en vivo**: las unidades en misión (`en_ruta`, `en_escena`, `regresando`) dibujan su recorrido en ámbar sobre el mapa; crece con cada ping SSE, descarta el jitter menor a 10 m y se limpia al volver a `disponible`. Al abrir la central, el tramo ya grabado de la misión actual se **precarga** con `GET /api/units/[id]/track?since=` (no pisa los pings en vivo).
+- **Rumbo y velocidad**: el marcador gira con el rumbo calculado entre pings y el popup muestra velocidad (km/h), rumbo cardinal/grados y antigüedad del último GPS.
+- **Filtro «Solo en salida»**: capa del mapa para ocultar unidades disponibles y ver únicamente las que van en ruta o regresando; el panel de unidades añade los filtros Todas / En salida / Libres.
+- **Vista «En salida»**: al abrir el filtro homónimo, las unidades se ordenan por llegada y muestran destino, **ETA y distancia vial** (OSRM, refresco cada 45 s), velocidad y antigüedad del GPS. Las que regresan calculan su ETA al Cuartel B-35 y, si OSRM no responde, la estimación se marca con `≈`.
 - `GET /api/events` hace un `SELECT 1` cada 60 s para mantener caliente el compute de Neon (evita el arranque en frío de 1-3 s en las primeras respuestas del tablero tras inactividad).
 
 ### Herramientas de la tanda «benchmark Bryx/First Due»

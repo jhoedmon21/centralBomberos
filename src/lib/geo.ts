@@ -15,6 +15,17 @@ export function haversineM(lat1: number, lng1: number, lat2: number, lng2: numbe
   return 2 * R_TIERRA_M * Math.asin(Math.sqrt(a));
 }
 
+/** Rumbo geográfico en grados (0 = norte, 90 = este) entre dos puntos */
+export function bearingDeg(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const rad = Math.PI / 180;
+  const dLng = (lng2 - lng1) * rad;
+  const y = Math.sin(dLng) * Math.cos(lat2 * rad);
+  const x =
+    Math.cos(lat1 * rad) * Math.sin(lat2 * rad) -
+    Math.sin(lat1 * rad) * Math.cos(lat2 * rad) * Math.cos(dLng);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
 export interface HydrantNear {
   hydrant: HydrantDTO;
   meters: number;

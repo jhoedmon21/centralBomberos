@@ -9,6 +9,7 @@ import * as maplibregl from "maplibre-gl";
 import type * as GeoJSON from "geojson";
 import {
   Ambulance,
+  ArrowUp,
   Buildings,
   ChatCircle,
   Crosshair,
@@ -158,8 +159,18 @@ const UNIT_TYPE_ICON: Record<UnitType, IconCmp> = {
 function UnitDot({ unit: u }: { unit: UnitDTO }) {
   const TypeIcon = UNIT_TYPE_ICON[u.type] ?? Truck;
   const statusColor = UNIT_COLOR[u.status] ?? "#fff";
+  const moving = u.heading != null && (u.speedKmh ?? 0) >= 3;
   return (
     <div className="mk mk-unit">
+      {moving && (
+        <span
+          className="unit-bearing"
+          style={{ transform: `rotate(${u.heading}deg)` }}
+          aria-hidden="true"
+        >
+          <ArrowUp size={12} weight="bold" />
+        </span>
+      )}
       <div className="dot" style={{ borderColor: statusColor }}>
         <TypeIcon size={11} weight="fill" color={statusColor} />
         <span>{u.code}</span>
@@ -204,6 +215,12 @@ function QuakeDot({ mag }: { mag: number }) {
 /** Respeta la preferencia del sistema de reducir movimiento. */
 function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** Punto cardinal del rumbo (0 = norte) para el popup de la unidad */
+const CARDINALS = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"] as const;
+function compass(heading: number): string {
+  return CARDINALS[Math.round(heading / 45) % 8];
 }
 
 /** Motor: clic para fijar ubicación, escala, vuelo al seleccionado y hook de pruebas. */
@@ -446,6 +463,8 @@ function HydrantPopup({
 interface Props {
   incidents: IncidentDTO[];
   units: UnitDTO[];
+  /** Rastro GPS en vivo por unidad ([lng,lat]); solo unidades en salida */
+  unitTrails: Record<number, [number, number][]>;
   hydrants: HydrantDTO[];
   risks: RiskDTO[];
   /** Fichas operativas de riesgo (preplans) */
@@ -486,6 +505,7 @@ type PopupState =
 export default function MapView({
   incidents,
   units,
+  unitTrails,
   hydrants,
   risks,
   preplans,
@@ -515,6 +535,9 @@ export default function MapView({
   const [quakes, setQuakes] = useState<QuakesFeed | null>(null);
   const [popup, setPopup] = useState<PopupState>(null);
   const [hoverTip, setHoverTip] = useState<{ lng: number; lat: number; label: string } | null>(null);
+  /** Capa de unidades: ocultar las que están disponibles y mostrar solo las
+   *  que salen a una emergencia (o vuelven de ella). */
+  const [onlyEnRoute, setOnlyEnRoute] = useState(false);
 
   // ---- Regla de medición (First Due: distancias de tramos, p. ej. mangueras) ----
   // Vértices en orden GeoJSON [lng, lat]; null = herramienta apagada
@@ -760,6 +783,33 @@ export default function MapView({
           />
         )}
 
+        {/* Rastro GPS EN VIVO de las unidades que salen a una emergencia.
+            Crece con cada ping SSE; se limpia al volver a disponible. */}
+        {layers.units &&
+          Object.entries(unitTrails).map(([id, points]) => {
+            if (points.length < 2) return null;
+            const unitId = Number(id);
+            const unit = units.find((u) => u.id === unitId);
+            if (onlyEnRoute && unit?.status !== "en_ruta" && unit?.status !== "regresando") return null;
+            return (
+              <MapGeoJSON
+                key={`live-${id}`}
+                id={`fw-live-${id}`}
+                data={{
+                  type: "Feature",
+                  properties: {},
+                  geometry: { type: "LineString", coordinates: points },
+                }}
+                fillPaint={false}
+                linePaint={{
+                  "line-color": unit?.status === "en_escena" ? "#4da3ff" : "#eea72c",
+                  "line-width": 3,
+                  "line-opacity": 0.7,
+                }}
+              />
+            );
+          })}
+
         {/* Recorrido GPS grabado de una unidad (botón «Ver recorrido») */}
         {track && track.data.points.length >= 2 && (
           <MapGeoJSON
@@ -874,6 +924,7 @@ export default function MapView({
         {layers.units &&
           units
             .filter((u) => u.lat != null && u.lng != null)
+            .filter((u) => !onlyEnRoute || u.status === "en_ruta" || u.status === "regresando")
             .map((u) => (
               <MapMarker
                 key={`u-${u.id}`}
@@ -976,6 +1027,23 @@ export default function MapView({
               <div className="mt-0.5 text-[11px] text-mu">
                 {popupUnit.station ?? "Sin compañía"} · {popupUnit.crew ?? "—"} efectivos
               </div>
+              {(popupUnit.speedKmh != null || popupUnit.pingAt != null) && (
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-mu">
+                  {popupUnit.speedKmh != null && (
+                    <span>
+                      {popupUnit.speedKmh < 1 ? "Detenida" : `${Math.round(popupUnit.speedKmh)} km/h`}
+                    </span>
+                  )}
+                  {popupUnit.heading != null && (popupUnit.speedKmh ?? 0) >= 1 && (
+                    <span aria-label={`Rumbo ${Math.round(popupUnit.heading)} grados`}>
+                      {compass(popupUnit.heading)} · {Math.round(popupUnit.heading)}°
+                    </span>
+                  )}
+                  {popupUnit.pingAt != null && (
+                    <span>GPS {timeAgo(new Date(popupUnit.pingAt).toISOString())}</span>
+                  )}
+                </div>
+              )}
               {popupUnit.incidentId && (
                 <button
                   className="btn btn-sm btn-red mt-2 w-full"
@@ -1183,6 +1251,12 @@ export default function MapView({
                 checked={layers.units}
                 onChange={() => onToggleLayer("units")}
                 swatch={<Square size={10} weight="fill" className="text-blue" />}
+              />
+              <LayerToggle
+                label="Solo en salida"
+                checked={onlyEnRoute}
+                onChange={() => setOnlyEnRoute((v) => !v)}
+                swatch={<ArrowUp size={10} weight="bold" className="text-amber" />}
               />
               <LayerToggle
                 label="Hidrantes"

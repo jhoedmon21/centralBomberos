@@ -6,7 +6,8 @@ import { Fire, ListBullets, MapTrifold } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { useLiveFeed } from "@/hooks/useLiveFeed";
 import { playAlarm, primeAudio } from "@/lib/alarm";
-import { FIREHOUSE, haversineM, nearestHydrants, nearestPreplan } from "@/lib/geo";
+import { FIREHOUSE, bearingDeg, haversineM, nearestHydrants, nearestPreplan } from "@/lib/geo";
+import { activeIncidentForUnit } from "@/lib/units";
 import { ACTIVE_STATUSES, HYDRANT_SITUATION_META } from "@/lib/meta";
 import type {
   ActivityDTO,
@@ -78,10 +79,22 @@ async function jfetch<T>(url: string, init?: RequestInit): Promise<T> {
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
+/** Estados de salida: mientras la unidad está en ellos se dibuja su rastro
+ *  GPS en vivo y se muestran rumbo/velocidad. */
+const UNIT_EN_ROUTE_STATUSES: UnitStatus[] = ["en_ruta", "en_escena", "regresando"];
+
 export default function CommandCenter({ initial, op }: { initial: InitialData; op: OperatorDTO }) {
   // ----- Datos -----
   const [incidents, setIncidents] = useState<IncidentDTO[]>(initial.incidents);
   const [units, setUnits] = useState<UnitDTO[]>(initial.units);
+  // Rastro GPS en vivo por unidad ([lng,lat]) y última muestra para derivar
+  // rumbo/velocidad entre pings (no se guarda en la BD: es solo de la sesión).
+  const [unitTrails, setUnitTrails] = useState<Record<number, [number, number][]>>({});
+  const unitLiveRef = useRef<
+    Map<number, { lat: number; lng: number; at: number; heading: number | null; speedKmh: number | null }>
+  >(new Map());
+  /** Unidades cuyo rastro histórico ya se pidió para la misión actual */
+  const trailSeededRef = useRef<Set<number>>(new Set());
   const [hydrants, setHydrants] = useState<HydrantDTO[]>(initial.hydrants);
   const [activity, setActivity] = useState<ActivityDTO[]>(initial.activity);
   const [stats, setStats] = useState<StatsDTO>(initial.stats);
@@ -237,7 +250,20 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         jfetch<{ preplans: PreplanDTO[] }>("/api/preplans"),
       ]);
       setIncidents(inc.incidents);
-      setUnits(un.units);
+      // El refetch no debe borrar rumbo/velocidad/ping derivados del GPS en vivo
+      setUnits(
+        un.units.map((u) => {
+          const live = unitLiveRef.current.get(u.id);
+          if (!live) return u;
+          const enRuta = UNIT_EN_ROUTE_STATUSES.includes(u.status);
+          return {
+            ...u,
+            heading: enRuta ? live.heading : null,
+            speedKmh: enRuta ? live.speedKmh : null,
+            pingAt: live.at,
+          };
+        }),
+      );
       setHydrants(hy.hydrants);
       setStats(st.stats);
       setActivity(act.activity);
@@ -275,6 +301,44 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
   useEffect(() => {
     unitsIdsRef.current = new Set(units.map((u) => u.id));
   }, [units]);
+
+  // Precarga del rastro: al abrir la central (o al volver a primer plano) las
+  // unidades que ya están en misión recuperan el tramo grabado desde que
+  // salieron, en vez de arrancar con una línea en blanco. Se pide UNA vez por
+  // misión y, si ya hay pings en vivo, no se pisa el trazo.
+  useEffect(() => {
+    for (const u of units) {
+      if (!UNIT_EN_ROUTE_STATUSES.includes(u.status)) {
+        trailSeededRef.current.delete(u.id);
+        continue;
+      }
+      if (trailSeededRef.current.has(u.id)) continue;
+      trailSeededRef.current.add(u.id);
+
+      const incident = activeIncidentForUnit(u, incidents);
+      const assignment = incident?.units?.find((a) => a.unitId === u.id);
+      const since =
+        assignment?.acceptedAt ??
+        assignment?.dispatchedAt ??
+        incident?.dispatchAt ??
+        incident?.acceptedAt ??
+        u.statusAt;
+      void jfetch<{ track: TrackDTO | null }>(
+        `/api/units/${u.id}/track?since=${encodeURIComponent(since)}`,
+      )
+        .then((d) => {
+          const pts = d.track?.points;
+          if (!pts || pts.length < 2) return;
+          setUnitTrails((prev) => {
+            if ((prev[u.id]?.length ?? 0) > 1) return prev;
+            return { ...prev, [u.id]: pts.slice(-600) };
+          });
+        })
+        .catch(() => {
+          /* la precarga es opcional: el rastro en vivo sigue funcionando */
+        });
+    }
+  }, [units, incidents]);
 
   const loadDetail = useCallback(async (id: number) => {
     setDetailBusy(true);
@@ -331,15 +395,66 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
       if (ev.type === "unit" && ev.unit) {
         const s = ev.unit;
         if (!unitsIdsRef.current.has(s.id)) void scheduleRefresh();
-        setUnits((prev) => {
-          const i = prev.findIndex((u) => u.id === s.id);
-          if (i === -1) return prev;
-          const cur = prev[i];
-          if (cur.lat === s.lat && cur.lng === s.lng && cur.status === s.status) return prev;
-          const next = prev.slice();
-          next[i] = { ...cur, lat: s.lat, lng: s.lng, status: s.status };
+
+        // Rumbo y velocidad se derivan de dos pings consecutivos. No se
+        // inventan números: si no hay movimiento, la velocidad es 0.
+        const now = ev.at || Date.now();
+        const prev = unitLiveRef.current.get(s.id);
+        let heading = prev?.heading ?? null;
+        let speedKmh: number | null = null;
+        if (prev && s.lat != null && s.lng != null) {
+          const dtS = (now - prev.at) / 1000;
+          const movedM = haversineM(prev.lat, prev.lng, s.lat, s.lng);
+          if (dtS >= 0.5) {
+            speedKmh = movedM >= 3 ? Math.min(180, (movedM / dtS) * 3.6) : 0;
+            if (movedM >= 8) heading = bearingDeg(prev.lat, prev.lng, s.lat, s.lng);
+          }
+        }
+        if (s.lat != null && s.lng != null) {
+          unitLiveRef.current.set(s.id, { lat: s.lat, lng: s.lng, at: now, heading, speedKmh });
+        }
+
+        const enRuta = UNIT_EN_ROUTE_STATUSES.includes(s.status);
+        setUnits((prevUnits) => {
+          const i = prevUnits.findIndex((u) => u.id === s.id);
+          if (i === -1) return prevUnits;
+          const next = prevUnits.slice();
+          next[i] = {
+            ...prevUnits[i],
+            lat: s.lat,
+            lng: s.lng,
+            status: s.status,
+            heading: enRuta ? heading : null,
+            speedKmh: enRuta ? speedKmh : null,
+            pingAt: now,
+          };
           return next;
         });
+
+        // Rastro en vivo: solo durante la salida. Se descarta el jitter
+        // (<10 m) y se limita a 600 puntos para no crecer sin control.
+        if (enRuta && s.lat != null && s.lng != null) {
+          const lat = s.lat;
+          const lng = s.lng;
+          setUnitTrails((prevTrails) => {
+            const pts = prevTrails[s.id] ?? [];
+            const last = pts[pts.length - 1];
+            if (last && haversineM(last[1], last[0], lat, lng) < 10) return prevTrails;
+            return {
+              ...prevTrails,
+              [s.id]: [...pts, [lng, lat] as [number, number]].slice(-600),
+            };
+          });
+        } else if (!enRuta) {
+          setUnitTrails((prevTrails) => {
+            if (prevTrails[s.id] == null) return prevTrails;
+            const nextTrails = { ...prevTrails };
+            delete nextTrails[s.id];
+            return nextTrails;
+          });
+          unitLiveRef.current.delete(s.id); // la próxima salida arranca limpia
+          trailSeededRef.current.delete(s.id); // y se vuelve a precargar su rastro
+        }
         return;
       }
       // Mensaje de chat: llega completo en el evento — el panel abierto lo
@@ -470,6 +585,10 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
       });
       setDetail(d.incident);
       setDispatchFor(null);
+      // Salida de una sola unidad: la cámara la sigue desde el primer ping
+      // (el operador puede soltarla arrastrando el mapa).
+      const target = unitIds.length === 1 ? units.find((u) => u.id === unitIds[0]) : null;
+      if (target?.lat != null && target.lng != null) setFollowUnitId(target.id);
       const plural = unitIds.length > 1 ? `${unitIds.length} unidades` : "la unidad";
       if (link && win) {
         win.location.href = link;
@@ -924,6 +1043,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
           incidents={mapIncidents}
           route={route?.data ?? null}
           units={units}
+          unitTrails={unitTrails}
           hydrants={hydrants}
           risks={initial.risks}
           preplans={preplans}
@@ -970,6 +1090,7 @@ export default function CommandCenter({ initial, op }: { initial: InitialData; o
         {unitsOpen && (
           <UnitsPanel
             units={units}
+            incidents={incidents}
             role={op.role}
             busyId={unitBusyRow}
             followingId={followUnitId}

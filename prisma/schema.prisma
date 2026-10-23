@@ -73,7 +73,7 @@ model Unit {
   id        Int        @id @default(autoincrement())
   code      String     @unique // B-12, C-3, R-7...
   name      String
-  type      String     @default("bomba") // bomba | cisterna | rescate | ambulancia | mando
+  type      String     @default("bomba") // bomba | cisterna | rescate | ambulancia | auxiliar | mando
   status    String     @default("disponible") // disponible | en_ruta | en_escena | regresando | fuera_servicio
   /// Marca de tiempo del último cambio de estado (resuelve conflictos: gana el más reciente)
   statusAt  DateTime   @default(now())
@@ -88,12 +88,32 @@ model Unit {
   createdAt DateTime   @default(now())
   incidents      Incident[]
   items          UnitItem[]
+  crewMembers    UnitCrew[]
   pushSubs       PushSubscription[]
   dispatches     IncidentUnit[]
   gpsPoints      GpsPoint[]
   chatMessages   ChatMessage[]
 
   @@index([status])
+}
+
+/// Bombero a bordo de una unidad: lo carga el chofer desde la tablet
+/// y la central lo ve en el panel de unidades.
+model UnitCrew {
+  id       Int       @id @default(autoincrement())
+  unitId   Int
+  unit     Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  name     String
+  role     String    @default("bombero") // chofer | jefe_equipo | bombero | practicante
+  status   String    @default("en_carro") // en_carro | en_escena | fuera
+  /// Código corto que el bombero ingresa en su app personal para vincularse
+  joinCode String    @unique
+  /// Momento en que la app personal se vinculó (null = aún sin vincular)
+  linkedAt DateTime?
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+
+  @@index([unitId, leftAt])
 }
 
 /// Material o implemento del inventario de una unidad

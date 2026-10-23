@@ -58,6 +58,7 @@ export const UNIT_TYPE_META: Record<UnitType, { label: string }> = {
   cisterna: { label: "Cisterna" },
   rescate: { label: "Rescate" },
   ambulancia: { label: "Ambulancia" },
+  auxiliar: { label: "Auxiliar" },
   mando: { label: "Mando" },
 };
 

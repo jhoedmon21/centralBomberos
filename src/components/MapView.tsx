@@ -24,6 +24,7 @@ import {
   TrafficSignal,
   Triangle,
   Truck,
+  Van,
   Warning,
   X,
 } from "@phosphor-icons/react";
@@ -153,6 +154,7 @@ const UNIT_TYPE_ICON: Record<UnitType, IconCmp> = {
   cisterna: Truck,
   rescate: Lifebuoy,
   ambulancia: Ambulance,
+  auxiliar: Van,
   mando: Flag,
 };
 

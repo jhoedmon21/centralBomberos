@@ -18,7 +18,7 @@ export type UnitStatus =
   | "regresando"
   | "fuera_servicio";
 
-export type UnitType = "bomba" | "cisterna" | "rescate" | "ambulancia" | "mando";
+export type UnitType = "bomba" | "cisterna" | "rescate" | "ambulancia" | "auxiliar" | "mando";
 
 export type UnitItemCategory =
   | "extintor"
@@ -42,6 +42,18 @@ export interface EventDTO {
   createdAt: string;
 }
 
+export type UnitCrewRole = "chofer" | "jefe_equipo" | "bombero" | "practicante";
+export type UnitCrewStatus = "en_carro" | "en_escena" | "fuera";
+
+export interface UnitCrewDTO {
+  id: number;
+  unitId: number;
+  name: string;
+  role: UnitCrewRole;
+  status: UnitCrewStatus;
+  joinedAt: string;
+}
+
 export interface UnitDTO {
   id: number;
   code: string;
@@ -57,6 +69,8 @@ export interface UnitDTO {
   /** Marca del último cambio de estado (resuelve conflictos app ↔ central) */
   statusAt: string;
   statusSource: "unidad" | "operador" | "sistema";
+  /** Bomberos a bordo cargados por el chofer */
+  crewMembers: UnitCrewDTO[];
   /** Solo en la central: rumbo (°) derivado de los últimos pings GPS */
   heading?: number | null;
   /** Solo en la central: velocidad (km/h) derivada de los últimos pings GPS */

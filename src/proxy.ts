@@ -19,9 +19,11 @@ import { OPERATOR_COOKIE, verifyOperatorToken } from "@/lib/optoken";
 //   /api/whatsapp/**       — webhook del bot (verificación del propio canal)
 //   /api/media/**          — fotos de reportes (enlaces públicos compartidos por WhatsApp)
 //   /api/push/**           — VAPID pública + suscripción web push de bomberos sin unidad
+//   /api/crew/**           — Bombero Guardián vinculado con su carro (token Bearer propio)
 //   /api/operator/login    — el propio ingreso al CAD
 const PUBLIC_API_PREFIXES = [
   "/api/app",
+  "/api/crew",
   "/api/units/auth",
   "/api/units/me",
   "/api/missions",

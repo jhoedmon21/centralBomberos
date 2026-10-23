@@ -30,96 +30,96 @@ async function main() {
   // ---------- Unidades ----------
   // Se crean una a una para poder referenciar sus ids reales en los
   // incidentes (los autoincrementales no se reinician con deleteMany).
-  const uB1 = await prisma.unit.create({
-    data: { code: "B-1", name: "Bomba 1", type: "bomba", status: "en_escena", station: "Cía. Camaná Centro", crew: 5, lat: -16.6247, lng: -72.7095 },
+  const uAB = await prisma.unit.create({
+    data: { code: "B-1", name: "AUTOBOMBA", type: "bomba", status: "en_escena", station: "Cía. Camaná Centro", crew: 5, lat: -16.6247, lng: -72.7095 },
   });
-  const uB2 = await prisma.unit.create({
-    data: { code: "B-2", name: "Bomba 2", type: "bomba", status: "disponible", station: "Cía. Samuel Pastor (La Pampa)", crew: 5, lat: -16.606, lng: -72.706 },
+  const uAux1 = await prisma.unit.create({
+    data: { code: "AUX-1", name: "AUXILIAR-1", type: "auxiliar", status: "disponible", station: "Cía. Samuel Pastor (La Pampa)", crew: 5, lat: -16.606, lng: -72.706 },
   });
-  const uC1 = await prisma.unit.create({
-    data: { code: "C-1", name: "Cisterna 1", type: "cisterna", status: "en_ruta", station: "Cía. José María Quimper (El Cardo)", crew: 3, lat: -16.6115, lng: -72.7365 },
+  const uCis = await prisma.unit.create({
+    data: { code: "C-1", name: "CISTERNA", type: "cisterna", status: "en_ruta", station: "Cía. José María Quimper (El Cardo)", crew: 3, lat: -16.6115, lng: -72.7365 },
   });
-  const uR1 = await prisma.unit.create({
-    data: { code: "R-1", name: "Rescate 1", type: "rescate", status: "disponible", station: "Cía. Camaná Sur", crew: 4, lat: -16.631, lng: -72.708 },
+  const uRes = await prisma.unit.create({
+    data: { code: "R-1", name: "RESCATE", type: "rescate", status: "disponible", station: "Cía. Camaná Sur", crew: 4, lat: -16.631, lng: -72.708 },
   });
-  const uAmb1 = await prisma.unit.create({
-    data: { code: "AMB-1", name: "Ambulancia 1", type: "ambulancia", status: "disponible", station: "SAMU Camaná — Hospital", crew: 3, lat: -16.6272, lng: -72.7075 },
+  const uAmb = await prisma.unit.create({
+    data: { code: "AMB-1", name: "AMBULANCIA", type: "ambulancia", status: "disponible", station: "SAMU Camaná — Hospital", crew: 3, lat: -16.6272, lng: -72.7075 },
   });
-  const uM1 = await prisma.unit.create({
-    data: { code: "M-1", name: "Mando 1", type: "mando", status: "disponible", station: "Comandancia Camaná", crew: 2, lat: -16.6252, lng: -72.712 },
+  const uAux2 = await prisma.unit.create({
+    data: { code: "AUX-2", name: "AUXILIAR-2", type: "auxiliar", status: "disponible", station: "Comandancia Camaná", crew: 2, lat: -16.6252, lng: -72.712 },
   });
 
   // ---------- Inventario de materiales por unidad ----------
   await prisma.unitItem.createMany({
     data: [
-      // Bomba 1
-      { unitId: uB1.id, name: "Manguera 38 mm × 15 m", category: "manguera", quantity: 10, condition: "bueno" },
-      { unitId: uB1.id, name: "Manguera 64 mm × 15 m", category: "manguera", quantity: 8, condition: "bueno" },
-      { unitId: uB1.id, name: "Pitón universal 38/64 mm", category: "manguera", quantity: 4, condition: "bueno" },
-      { unitId: uB1.id, name: "Llave de hidrante", category: "manguera", quantity: 2, condition: "bueno" },
-      { unitId: uB1.id, name: "Extintor PQS 12 kg", category: "extintor", quantity: 2, condition: "bueno" },
-      { unitId: uB1.id, name: "Hacha de bombero", category: "herramienta", quantity: 2, condition: "regular", notes: "Un mango con desgaste, programar reposición." },
-      { unitId: uB1.id, name: "Barra de palanca", category: "herramienta", quantity: 1, condition: "bueno" },
-      { unitId: uB1.id, name: "Motosierra", category: "herramienta", quantity: 1, condition: "bueno" },
-      { unitId: uB1.id, name: "Casco F1 con visor", category: "epp", quantity: 6, condition: "bueno" },
-      { unitId: uB1.id, name: "Chaquetón y pantalón de combate", category: "epp", quantity: 6, condition: "bueno" },
-      { unitId: uB1.id, name: "Botas de jebe", category: "epp", quantity: 6, condition: "bueno" },
-      { unitId: uB1.id, name: "Guantes de combate", category: "epp", quantity: 8, condition: "bueno" },
-      { unitId: uB1.id, name: "Linterna portátil recargable", category: "equipo", quantity: 6, condition: "bueno" },
-      { unitId: uB1.id, name: "Cuerda de rescate 30 m", category: "equipo", quantity: 2, condition: "bueno" },
-      { unitId: uB1.id, name: "Escalera de extensión 8 m", category: "equipo", quantity: 1, condition: "bueno" },
-      { unitId: uB1.id, name: "Radio portátil VHF", category: "comunicacion", quantity: 3, condition: "bueno" },
+      // Autobomba (B-1)
+      { unitId: uAB.id, name: "Manguera 38 mm × 15 m", category: "manguera", quantity: 10, condition: "bueno" },
+      { unitId: uAB.id, name: "Manguera 64 mm × 15 m", category: "manguera", quantity: 8, condition: "bueno" },
+      { unitId: uAB.id, name: "Pitón universal 38/64 mm", category: "manguera", quantity: 4, condition: "bueno" },
+      { unitId: uAB.id, name: "Llave de hidrante", category: "manguera", quantity: 2, condition: "bueno" },
+      { unitId: uAB.id, name: "Extintor PQS 12 kg", category: "extintor", quantity: 2, condition: "bueno" },
+      { unitId: uAB.id, name: "Hacha de bombero", category: "herramienta", quantity: 2, condition: "regular", notes: "Un mango con desgaste, programar reposición." },
+      { unitId: uAB.id, name: "Barra de palanca", category: "herramienta", quantity: 1, condition: "bueno" },
+      { unitId: uAB.id, name: "Motosierra", category: "herramienta", quantity: 1, condition: "bueno" },
+      { unitId: uAB.id, name: "Casco F1 con visor", category: "epp", quantity: 6, condition: "bueno" },
+      { unitId: uAB.id, name: "Chaquetón y pantalón de combate", category: "epp", quantity: 6, condition: "bueno" },
+      { unitId: uAB.id, name: "Botas de jebe", category: "epp", quantity: 6, condition: "bueno" },
+      { unitId: uAB.id, name: "Guantes de combate", category: "epp", quantity: 8, condition: "bueno" },
+      { unitId: uAB.id, name: "Linterna portátil recargable", category: "equipo", quantity: 6, condition: "bueno" },
+      { unitId: uAB.id, name: "Cuerda de rescate 30 m", category: "equipo", quantity: 2, condition: "bueno" },
+      { unitId: uAB.id, name: "Escalera de extensión 8 m", category: "equipo", quantity: 1, condition: "bueno" },
+      { unitId: uAB.id, name: "Radio portátil VHF", category: "comunicacion", quantity: 3, condition: "bueno" },
 
-      // Bomba 2
-      { unitId: uB2.id, name: "Manguera 38 mm × 15 m", category: "manguera", quantity: 6, condition: "bueno" },
-      { unitId: uB2.id, name: "Manguera 64 mm × 15 m", category: "manguera", quantity: 4, condition: "regular", notes: "Dos tramos con fugas leves." },
-      { unitId: uB2.id, name: "Pitón universal 38/64 mm", category: "manguera", quantity: 2, condition: "bueno" },
-      { unitId: uB2.id, name: "Extintor PQS 12 kg", category: "extintor", quantity: 1, condition: "bueno" },
-      { unitId: uB2.id, name: "Hacha de bombero", category: "herramienta", quantity: 2, condition: "bueno" },
-      { unitId: uB2.id, name: "Equipo de protección completo", category: "epp", quantity: 4, condition: "bueno" },
-      { unitId: uB2.id, name: "Linterna portátil", category: "equipo", quantity: 4, condition: "bueno" },
-      { unitId: uB2.id, name: "Radio portátil VHF", category: "comunicacion", quantity: 2, condition: "bueno" },
+      // Auxiliar-1 (AUX-1)
+      { unitId: uAux1.id, name: "Manguera 38 mm × 15 m", category: "manguera", quantity: 6, condition: "bueno" },
+      { unitId: uAux1.id, name: "Manguera 64 mm × 15 m", category: "manguera", quantity: 4, condition: "regular", notes: "Dos tramos con fugas leves." },
+      { unitId: uAux1.id, name: "Pitón universal 38/64 mm", category: "manguera", quantity: 2, condition: "bueno" },
+      { unitId: uAux1.id, name: "Extintor PQS 12 kg", category: "extintor", quantity: 1, condition: "bueno" },
+      { unitId: uAux1.id, name: "Hacha de bombero", category: "herramienta", quantity: 2, condition: "bueno" },
+      { unitId: uAux1.id, name: "Equipo de protección completo", category: "epp", quantity: 4, condition: "bueno" },
+      { unitId: uAux1.id, name: "Linterna portátil", category: "equipo", quantity: 4, condition: "bueno" },
+      { unitId: uAux1.id, name: "Radio portátil VHF", category: "comunicacion", quantity: 2, condition: "bueno" },
 
-      // Cisterna 1
-      { unitId: uC1.id, name: "Manguera 64 mm × 15 m", category: "manguera", quantity: 6, condition: "bueno" },
-      { unitId: uC1.id, name: "Llave de hidrante", category: "manguera", quantity: 2, condition: "bueno" },
-      { unitId: uC1.id, name: "Manguera de succión 4\"", category: "equipo", quantity: 2, condition: "bueno" },
-      { unitId: uC1.id, name: "Extintor PQS 12 kg", category: "extintor", quantity: 1, condition: "bueno" },
-      { unitId: uC1.id, name: "Hacha de bombero", category: "herramienta", quantity: 1, condition: "bueno" },
-      { unitId: uC1.id, name: "Equipo de protección completo", category: "epp", quantity: 3, condition: "bueno" },
-      { unitId: uC1.id, name: "Linterna portátil", category: "equipo", quantity: 2, condition: "bueno" },
-      { unitId: uC1.id, name: "Radio portátil VHF", category: "comunicacion", quantity: 2, condition: "regular" },
+      // Cisterna (C-1)
+      { unitId: uCis.id, name: "Manguera 64 mm × 15 m", category: "manguera", quantity: 6, condition: "bueno" },
+      { unitId: uCis.id, name: "Llave de hidrante", category: "manguera", quantity: 2, condition: "bueno" },
+      { unitId: uCis.id, name: "Manguera de succión 4\"", category: "equipo", quantity: 2, condition: "bueno" },
+      { unitId: uCis.id, name: "Extintor PQS 12 kg", category: "extintor", quantity: 1, condition: "bueno" },
+      { unitId: uCis.id, name: "Hacha de bombero", category: "herramienta", quantity: 1, condition: "bueno" },
+      { unitId: uCis.id, name: "Equipo de protección completo", category: "epp", quantity: 3, condition: "bueno" },
+      { unitId: uCis.id, name: "Linterna portátil", category: "equipo", quantity: 2, condition: "bueno" },
+      { unitId: uCis.id, name: "Radio portátil VHF", category: "comunicacion", quantity: 2, condition: "regular" },
 
-      // Rescate 1
-      { unitId: uR1.id, name: "Quijada hidráulica (Jaws of Life)", category: "rescate", quantity: 1, condition: "bueno" },
-      { unitId: uR1.id, name: "Cizalla hidráulica", category: "rescate", quantity: 1, condition: "bueno" },
-      { unitId: uR1.id, name: "Cilindros de elevación neumática", category: "rescate", quantity: 2, condition: "bueno" },
-      { unitId: uR1.id, name: "Cuerda kernmantle 50 m", category: "rescate", quantity: 2, condition: "bueno" },
-      { unitId: uR1.id, name: "Arnés de rescate", category: "rescate", quantity: 4, condition: "bueno" },
-      { unitId: uR1.id, name: "Camilla rígida de rescate", category: "rescate", quantity: 1, condition: "bueno" },
-      { unitId: uR1.id, name: "Amoladora de corte", category: "herramienta", quantity: 1, condition: "regular", notes: "Disco próximo a vencer, reponer." },
-      { unitId: uR1.id, name: "Hacha de rescate", category: "herramienta", quantity: 2, condition: "bueno" },
-      { unitId: uR1.id, name: "Casco de rescate", category: "epp", quantity: 4, condition: "bueno" },
-      { unitId: uR1.id, name: "Eslingas y mosquetones varios", category: "equipo", quantity: 6, condition: "bueno" },
-      { unitId: uR1.id, name: "Radio portátil VHF", category: "comunicacion", quantity: 2, condition: "bueno" },
+      // Rescate (R-1)
+      { unitId: uRes.id, name: "Quijada hidráulica (Jaws of Life)", category: "rescate", quantity: 1, condition: "bueno" },
+      { unitId: uRes.id, name: "Cizalla hidráulica", category: "rescate", quantity: 1, condition: "bueno" },
+      { unitId: uRes.id, name: "Cilindros de elevación neumática", category: "rescate", quantity: 2, condition: "bueno" },
+      { unitId: uRes.id, name: "Cuerda kernmantle 50 m", category: "rescate", quantity: 2, condition: "bueno" },
+      { unitId: uRes.id, name: "Arnés de rescate", category: "rescate", quantity: 4, condition: "bueno" },
+      { unitId: uRes.id, name: "Camilla rígida de rescate", category: "rescate", quantity: 1, condition: "bueno" },
+      { unitId: uRes.id, name: "Amoladora de corte", category: "herramienta", quantity: 1, condition: "regular", notes: "Disco próximo a vencer, reponer." },
+      { unitId: uRes.id, name: "Hacha de rescate", category: "herramienta", quantity: 2, condition: "bueno" },
+      { unitId: uRes.id, name: "Casco de rescate", category: "epp", quantity: 4, condition: "bueno" },
+      { unitId: uRes.id, name: "Eslingas y mosquetones varios", category: "equipo", quantity: 6, condition: "bueno" },
+      { unitId: uRes.id, name: "Radio portátil VHF", category: "comunicacion", quantity: 2, condition: "bueno" },
 
-      // Ambulancia 1
-      { unitId: uAmb1.id, name: "Desfibrilador externo automático (DEA)", category: "medico", quantity: 1, condition: "bueno" },
-      { unitId: uAmb1.id, name: "Balón de oxígeno 2 m³ con regulador", category: "medico", quantity: 2, condition: "bueno" },
-      { unitId: uAmb1.id, name: "Botiquín de primeros auxilios", category: "medico", quantity: 2, condition: "bueno" },
-      { unitId: uAmb1.id, name: "Collarín cervical ajustable", category: "medico", quantity: 3, condition: "bueno" },
-      { unitId: uAmb1.id, name: "Camilla telescópica", category: "medico", quantity: 1, condition: "bueno" },
-      { unitId: uAmb1.id, name: "Tablilla de inmovilización", category: "medico", quantity: 2, condition: "bueno" },
-      { unitId: uAmb1.id, name: "Tensiómetro y estetoscopio", category: "medico", quantity: 1, condition: "bueno" },
-      { unitId: uAmb1.id, name: "Radio portátil VHF", category: "comunicacion", quantity: 2, condition: "bueno" },
+      // Ambulancia (AMB-1)
+      { unitId: uAmb.id, name: "Desfibrilador externo automático (DEA)", category: "medico", quantity: 1, condition: "bueno" },
+      { unitId: uAmb.id, name: "Balón de oxígeno 2 m³ con regulador", category: "medico", quantity: 2, condition: "bueno" },
+      { unitId: uAmb.id, name: "Botiquín de primeros auxilios", category: "medico", quantity: 2, condition: "bueno" },
+      { unitId: uAmb.id, name: "Collarín cervical ajustable", category: "medico", quantity: 3, condition: "bueno" },
+      { unitId: uAmb.id, name: "Camilla telescópica", category: "medico", quantity: 1, condition: "bueno" },
+      { unitId: uAmb.id, name: "Tablilla de inmovilización", category: "medico", quantity: 2, condition: "bueno" },
+      { unitId: uAmb.id, name: "Tensiómetro y estetoscopio", category: "medico", quantity: 1, condition: "bueno" },
+      { unitId: uAmb.id, name: "Radio portátil VHF", category: "comunicacion", quantity: 2, condition: "bueno" },
 
-      // Mando 1
-      { unitId: uM1.id, name: "Radio base móvil VHF", category: "comunicacion", quantity: 1, condition: "bueno" },
-      { unitId: uM1.id, name: "Radio portátil VHF", category: "comunicacion", quantity: 2, condition: "bueno" },
-      { unitId: uM1.id, name: "Chaleco reflectivo identificatorio", category: "epp", quantity: 4, condition: "bueno" },
-      { unitId: uM1.id, name: "Plano impreso de Camaná", category: "equipo", quantity: 3, condition: "regular", notes: "Actualizar con los hidrantes nuevos." },
-      { unitId: uM1.id, name: "Megáfono portátil", category: "equipo", quantity: 1, condition: "bueno" },
-      { unitId: uM1.id, name: "Binoculares", category: "equipo", quantity: 1, condition: "bueno" },
+      // Auxiliar-2 (AUX-2)
+      { unitId: uAux2.id, name: "Radio base móvil VHF", category: "comunicacion", quantity: 1, condition: "bueno" },
+      { unitId: uAux2.id, name: "Radio portátil VHF", category: "comunicacion", quantity: 2, condition: "bueno" },
+      { unitId: uAux2.id, name: "Chaleco reflectivo identificatorio", category: "epp", quantity: 4, condition: "bueno" },
+      { unitId: uAux2.id, name: "Plano impreso de Camaná", category: "equipo", quantity: 3, condition: "regular", notes: "Actualizar con los hidrantes nuevos." },
+      { unitId: uAux2.id, name: "Megáfono portátil", category: "equipo", quantity: 1, condition: "bueno" },
+      { unitId: uAux2.id, name: "Binoculares", category: "equipo", quantity: 1, condition: "bueno" },
     ],
   });
 
@@ -294,7 +294,7 @@ async function main() {
       createdAt: minAgo(64),
       dispatchAt: minAgo(60),
       arrivalAt: minAgo(41),
-      unitId: uB1.id,
+      unitId: uAB.id,
       events: {
         create: [
           { type: "creado", message: "Reporte recibido por WhatsApp", actor: "ciudadano", createdAt: minAgo(64) },
@@ -347,7 +347,7 @@ async function main() {
       notes: "Olor a gas en galería comercial. Personal evacuado parcialmente.",
       createdAt: minAgo(13),
       dispatchAt: minAgo(9),
-      unitId: uC1.id,
+      unitId: uCis.id,
       events: {
         create: [
           { type: "creado", message: "Reporte recibido por WhatsApp con foto", actor: "ciudadano", createdAt: minAgo(13) },

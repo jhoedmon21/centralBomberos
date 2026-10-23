@@ -21,6 +21,7 @@ Central de operaciones para bomberos: los ciudadanos reportan emergencias por **
 
 - **Máquina de estados** del incidente: `reportado → despachado → en_escena → controlado → cerrado`, con bitácora completa (timeline) por incidente.
 - **Bandeja de incidentes** priorizada por severidad y **panel de unidades** en lista plana con estado, **alta/baja de unidades** desde la central e **inventario de materiales por unidad** (mangueras, extintores, herramientas, rescate, médico, comunicaciones, EPP… con cantidad y condición, y opción de agregar/quitar).
+- **Tripulación por carro** — el chofer agrega a los bomberos desde la tablet (nombre y función); la central ve **«A bordo: …»** bajo cada unidad, en vivo.
 - **Estadísticas del día** — activos, tiempos de respuesta promedio, unidades disponibles.
 - **Tema oscuro táctico por defecto** y tema claro con selector; diseño «sala de operaciones» refinado (grafito azulado, rojo reservado a emergencias, ámbar para controles) y mapa despejado con un botón único de «Capas» (capas tácticas + leyenda de estados).
 - **Configuración** desde la UI — números de WhatsApp de la unidad y la central, **URL pública** para los enlaces compartidos (foto y mapa abren desde los teléfonos), sonido y tokens del webhook/Meta.
@@ -125,6 +126,10 @@ Flujo principal: **ciudadano → WhatsApp → webhook/ingesta → incidente + ev
 | `PATCH /api/incidents/[id]` | Editar el reporte (datos, foto) o cambiar `status`, `severity`, `notes` |
 | `POST /api/incidents/[id]/dispatch` | Despachar una o varias unidades (`{ unitIds: number[] }`; `unitId` suelto por compat). Admite refuerzos con el incidente en `despachado`/`en_escena`. **Solo la central** |
 | `GET /api/units` · `POST /api/units` | Lista y alta de unidades |
+| `GET /api/units/me/crew` · `POST /api/units/me/crew` | Tripulación a bordo: lista y alta desde la tablet |
+| `DELETE /api/units/me/crew/[id]` | Da de baja a un bombero de la tripulación (conserva el registro) |
+| `POST /api/crew/join` | Bombero Guardián canjea el código de su carro por un token propio (sin cookie) |
+| `GET/POST /api/crew/chat` | Chat real de la unidad desde la app personal (`Authorization: Bearer <token>`) |
 | `PATCH /api/units/[id]` · `DELETE /api/units/[id]` | Cambiar estado, dotación o ubicación (`lat`/`lng`) / dar de baja una unidad |
 | `GET/POST /api/units/[id]/chat` | Chat central ↔ unidad: historial y enviar mensaje (difundido por SSE) |
 | `GET /api/units/[id]/track` | Recorrido GPS grabado de la unidad (GeoJSON + metros; `?since=ISO` para recortar) |

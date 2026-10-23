@@ -9,6 +9,7 @@ import type {
   IncidentUnit,
   RiskPoint,
   Unit,
+  UnitCrew,
   UnitItem,
 } from "@prisma/client";
 import { prisma } from "./db";
@@ -62,7 +63,11 @@ const SOURCES: IncidentSource[] = ["whatsapp", "telefono116", "manual", "webhook
 // Serialización DTO
 // ------------------------------------------------------------------
 
-type UnitWithIncidents = Unit & { incidents?: { id: number }[]; _count?: { items: number } };
+type UnitWithIncidents = Unit & {
+  incidents?: { id: number }[];
+  crewMembers?: UnitCrew[];
+  _count?: { items: number };
+};
 
 export function toUnitDTO(u: UnitWithIncidents): UnitDTO {
   return {
@@ -79,6 +84,14 @@ export function toUnitDTO(u: UnitWithIncidents): UnitDTO {
     itemCount: u._count?.items ?? 0,
     statusAt: u.statusAt.toISOString(),
     statusSource: u.statusSource as UnitDTO["statusSource"],
+    crewMembers: (u.crewMembers ?? []).map((c) => ({
+      id: c.id,
+      unitId: c.unitId,
+      name: c.name,
+      role: c.role as UnitDTO["crewMembers"][number]["role"],
+      status: c.status as UnitDTO["crewMembers"][number]["status"],
+      joinedAt: c.joinedAt.toISOString(),
+    })),
   };
 }
 
@@ -192,6 +205,10 @@ export async function listUnits(): Promise<UnitDTO[]> {
         select: { id: true },
         orderBy: { createdAt: "desc" },
         take: 1,
+      },
+      crewMembers: {
+        where: { leftAt: null },
+        orderBy: { joinedAt: "asc" },
       },
       _count: { select: { items: true } },
     },
@@ -726,7 +743,7 @@ export async function updateUnit(
 // Parque de unidades: alta y baja
 // ------------------------------------------------------------------
 
-const UNIT_TYPES: UnitType[] = ["bomba", "cisterna", "rescate", "ambulancia", "mando"];
+const UNIT_TYPES: UnitType[] = ["bomba", "cisterna", "rescate", "ambulancia", "auxiliar", "mando"];
 
 export async function createUnit(input: {
   code: string;

@@ -225,6 +225,11 @@ export default function UnitsPanel({
                         {UNIT_TYPE_META[u.type].label} · {u.name}
                         {u.station ? ` · Cía. ${u.station}` : ""}
                       </p>
+                      {u.crewMembers.length > 0 && (
+                        <p className="truncate text-[11px] font-semibold text-green">
+                          A bordo: {u.crewMembers.map((c) => c.name).join(" · ")}
+                        </p>
+                      )}
                       {filter === "salida" && (
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
                           <span className="inline-flex min-w-0 items-center gap-1 text-mu">

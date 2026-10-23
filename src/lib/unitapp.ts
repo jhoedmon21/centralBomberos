@@ -362,6 +362,10 @@ export async function unitDTO(unitId: number): Promise<UnitDTO> {
         orderBy: { createdAt: "desc" },
         take: 1,
       },
+      crewMembers: {
+        where: { leftAt: null },
+        orderBy: { joinedAt: "asc" },
+      },
       _count: { select: { items: true } },
     },
   });
